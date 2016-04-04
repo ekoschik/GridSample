@@ -3,54 +3,7 @@
 #include <windows.h>
 #include "GridSample.h"
 
-UINT gDPI = 96;
 WORD gPrevConsoleTextAttribs;
-
-COLORREF rgbBackgroundColor = RGB(0, 0, 255);
-
-VOID ShiftWindowToStayEntirelyOnMonitor(HWND hwnd)
-{
-    // TODO is this needed, or is there a better way (there's got to be)
-
-    RECT rcWindow, rcWindowInitial;
-    GetWindowRect(hwnd, &rcWindow);
-    CopyRect(&rcWindowInitial, &rcWindow);
-
-    MONITORINFOEX hmonInfo;
-    hmonInfo.cbSize = sizeof(MONITORINFOEX);
-    HMONITOR hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-    if (GetMonitorInfo(hmon, &hmonInfo) != 0) {
-        RECT rcWork = hmonInfo.rcWork;
-        int cx = RECTWIDTH(rcWindow);
-        int cy = RECTHEIGHT(rcWindow);
-
-        if (rcWindow.left < rcWork.left) {
-            rcWindow.left = rcWork.left;
-            rcWindow.right = rcWindow.left + cx;
-        }
-        if (rcWindow.right > rcWork.right) {
-            rcWindow.right = rcWork.right;
-            rcWindow.left = rcWindow.right - cx;
-        }
-        if (rcWindow.top < rcWork.top) {
-            rcWindow.top = rcWork.top;
-            rcWindow.bottom = rcWindow.top + cy;
-        }
-        if (rcWindow.bottom > rcWork.bottom) {
-            rcWindow.bottom = rcWork.bottom;
-            rcWindow.top = rcWindow.bottom - cy;
-        }
-
-        if (!EqualRect(&rcWindow, &rcWindowInitial)) {
-            DbgPrint("Nudging window to stay entirely on the motitor work area!\n");
-
-            SetWindowPos(hwnd, NULL,
-                rcWindow.left, rcWindow.top,
-                RECTWIDTH(rcWindow), RECTHEIGHT(rcWindow),
-                SWP_SHOWWINDOW);
-        }
-    }
-}
 
 VOID SizeWindowToGrid(HWND hwnd)
 {
@@ -121,6 +74,8 @@ VOID InitWindow(HWND hwnd)
 BOOL bHandlingDpiChange = FALSE;
 VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
 {
+    static UINT gDPI = 96;
+
     bHandlingDpiChange = TRUE;
     DbgPrint("Handling a DPI change (new: %i, old: %i)\n",
         DPI, gDPI);
@@ -142,6 +97,7 @@ VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
 VOID Draw(HWND hwnd, HDC hdc)
 {
     // Fill background color
+    static COLORREF rgbBackgroundColor = RGB(0, 0, 255);
     static RECT rcClient;
     GetClientRect(hwnd, &rcClient);
     static HBRUSH hbr = CreateSolidBrush(rgbBackgroundColor);
@@ -181,10 +137,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     }
 
-    case WM_LBUTTONDBLCLK:
+    case WM_EXITSIZEMOVE:
+    {
+        // TODO: except when being snapped?
+        WINDOWPLACEMENT wp;
+        wp.length = sizeof(WINDOWPLACEMENT);
+        GetWindowPlacement(hwnd, &wp);
+
         SizeWindowToGrid(hwnd);
         break;
-    
+    }
+        
     case WM_MOUSEWHEEL:
         //HandleMouseWheel(hwnd,
         //    GET_KEYSTATE_WPARAM(wParam) | MK_CONTROL,
@@ -204,7 +167,7 @@ HWND CreateMainWindow()
     LPWSTR WndClassName = _T("WndClass");
     LPWSTR WndTitle = _T("Grid Sample");
 
-    UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW /*| CS_DBLCLKS*/;
     DWORD WndStyleEx = 0;
     DWORD WndStyle = WS_OVERLAPPEDWINDOW /*^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX)*/;
 
