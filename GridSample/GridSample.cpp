@@ -5,15 +5,81 @@
 
 WORD gPrevConsoleTextAttribs;
 
+
+
+BOOL GetWindowSizeForDesiredClientSize(
+    HWND hwnd,
+    UINT clientX,
+    UINT clientY,
+    UINT &windowX,
+    UINT &windowY)
+{
+    RECT rc = { 0, 0, clientX, clientY };
+
+    if (AdjustWindowRectExForDpi_l(&rc,
+        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
+        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
+        FALSE, GetDpiForWindow_l(hwnd))) {
+
+        windowX = RECTWIDTH(rc);
+        windowY = RECTHEIGHT(rc);
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+
 VOID SizeWindowToGrid(HWND hwnd)
 {
-    UINT clientCX, clientCY;
-    GetGridSize(clientCX, clientCY);
+    UINT gridCX, gridCY;
+    GetGridSize(gridCX, gridCY);
 
-    DbgPrint("Sizing window to fit grid. (grid size: %i x %i)\n", clientCX, clientCY);
+    // Return early if current client size is already the correct size
+    RECT rcClient;
+    GetClientRect(hwnd, &rcClient);
+    if (RECTWIDTH(rcClient) == gridCX && RECTHEIGHT(rcClient) == gridCY) {
+        return;
+    }
+
+    // Use AdjustWindowRectExForDpi to get new window size
+    UINT windowCX, windowCY;
+    if (!GetWindowSizeForDesiredClientSize(hwnd, gridCX, gridCY, windowCX, windowCY)) {
+        DbgPrintError("Failed to determine ideal window size.\n");
+        return;
+    }
+
+    // Print the change in window size
+    RECT rcWindow;
+    GetWindowRect(hwnd, &rcWindow);
+    DbgPrint("Snapping window size to grid size\n\told size: %i x %i\n\tnew size: %i x %i\n",
+        RECTWIDTH(rcWindow), RECTHEIGHT(rcWindow), windowCX, windowCY);
+
+    // Nudge out (or in) the bottom right corner to correct the window size
+    rcWindow.right = rcWindow.left + windowCX;
+    rcWindow.bottom = rcWindow.top + windowCY;
+
+    // Set new window position
+    SetWindowPos(hwnd, NULL,
+        rcWindow.left,
+        rcWindow.top,
+        RECTWIDTH(rcWindow),
+        RECTHEIGHT(rcWindow),
+        SWP_SHOWWINDOW);
+
+    // Error if the new client size doesn't match the grid size
+    GetClientRect(hwnd, &rcClient);
+    if (gridCX != RECTWIDTH(rcClient) ||
+        gridCY != RECTHEIGHT(rcClient)) {
+
+        DbgPrintError("Error, after setting initial window pos, client size didn't match expected.\n");
+        DbgPrintError("-->wanted %i x %i\n", gridCX, gridCY);
+        DbgPrintError("-->actual %i x %i\n", RECTWIDTH(rcClient), RECTHEIGHT(rcClient));
+    }
+
 
     // Determine window size to fit grid
-    RECT rc = { 0, 0, clientCX, clientCY };
+    RECT rc = { 0, 0, gridCX, gridCY };
     if (AdjustWindowRectExForDpi_l(&rc,
         (DWORD)GetWindowLong(hwnd, GWL_STYLE),
         (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
@@ -39,13 +105,12 @@ VOID SizeWindowToGrid(HWND hwnd)
             SWP_SHOWWINDOW);
 
         // Error if the new client size doesn't match the grid size
-        RECT rcClient;
         GetClientRect(hwnd, &rcClient);
-        if (clientCX != RECTWIDTH(rcClient) ||
-            clientCY != RECTHEIGHT(rcClient)) {
+        if (gridCX != RECTWIDTH(rcClient) ||
+            gridCY != RECTHEIGHT(rcClient)) {
 
             DbgPrintError("Error, after setting initial window pos, client size didn't match expected.\n");
-            DbgPrintError("-->wanted %i x %i\n", clientCX, clientCY);
+            DbgPrintError("-->wanted %i x %i\n", gridCX, gridCY);
             DbgPrintError("-->actual %i x %i\n", RECTWIDTH(rcClient), RECTHEIGHT(rcClient));
 
             // Sanity check (did we not get the correct window size?
@@ -71,12 +136,9 @@ VOID InitWindow(HWND hwnd)
     SizeWindowToGrid(hwnd);
 }
 
-BOOL bHandlingDpiChange = FALSE;
 VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
 {
     static UINT gDPI = 96;
-
-    bHandlingDpiChange = TRUE;
     DbgPrint("Handling a DPI change (new: %i, old: %i)\n",
         DPI, gDPI);
     gDPI = DPI;
@@ -90,8 +152,23 @@ VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
                  prc->right - prc->left,
                  prc->bottom - prc->top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
+}
 
-    bHandlingDpiChange = FALSE;
+VOID HandleMinMaxInfo(PMINMAXINFO pmmi)
+{
+
+    // TODO: limit the size of the window to the current monitor's work area
+
+
+
+
+
+
+
+
+
+
+
 }
 
 VOID Draw(HWND hwnd, HDC hdc)
@@ -108,6 +185,8 @@ VOID Draw(HWND hwnd, HDC hdc)
 
 }
 
+BOOL bTrackSnap = FALSE;
+BOOL bHandlingDpiChange = FALSE;
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message) {
@@ -117,7 +196,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
 
     case WM_DPICHANGED:
+        bHandlingDpiChange = TRUE;
         HandleDpiChange(hwnd, HIWORD(wParam), (RECT*)lParam);
+        bHandlingDpiChange = FALSE;
         break;
 
     case WM_PAINT:
@@ -129,25 +210,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     }
 
+    case WM_EXITSIZEMOVE:
+    case WM_WINDOWPOSCHANGING:
     case WM_WINDOWPOSCHANGED:
     {
+        // WindowPosChanging has some secret high bit we can use to
+        // hint whether or not we're in the process of being snapped
+        if (message == WM_WINDOWPOSCHANGING) {
+            // TODO look up the bit that's being set
+            bTrackSnap = ((WINDOWPOS*)lParam)->flags > 1000;
+        }
+
+        // Resize the grid to the new window size
         RECT rcClient;
         GetClientRect(hwnd, &rcClient);
-        ResizeGridWindowResize(rcClient);
+        if (SizeGridToWindow(rcClient) && bHandlingDpiChange) {
+            DbgPrintError("Error: resized grid while handling a DPI change.");
+        }
+
+        // If the last WindowPosChanging didn't looked like a snap,
+        // snap the window size to fit the grid
+        if (message == WM_EXITSIZEMOVE && !bTrackSnap) {
+            SizeWindowToGrid(hwnd);
+        }
         break;
     }
 
-    case WM_EXITSIZEMOVE:
-    {
-        // TODO: except when being snapped?
-        WINDOWPLACEMENT wp;
-        wp.length = sizeof(WINDOWPLACEMENT);
-        GetWindowPlacement(hwnd, &wp);
-
-        SizeWindowToGrid(hwnd);
+    case WM_GETMINMAXINFO:
+        HandleMinMaxInfo((PMINMAXINFO)lParam);
         break;
-    }
-        
+
     case WM_MOUSEWHEEL:
         //HandleMouseWheel(hwnd,
         //    GET_KEYSTATE_WPARAM(wParam) | MK_CONTROL,
@@ -169,7 +261,10 @@ HWND CreateMainWindow()
 
     UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW /*| CS_DBLCLKS*/;
     DWORD WndStyleEx = 0;
-    DWORD WndStyle = WS_OVERLAPPEDWINDOW /*^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX)*/;
+    DWORD WndStyle = WS_OVERLAPPEDWINDOW 
+        
+        // removing the following dis-allows resizing the window
+        /*^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX)*/;
 
     HINSTANCE hinst = GetModuleHandle(NULL);
     WNDCLASSEX wcex = { 0 };

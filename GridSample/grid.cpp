@@ -41,7 +41,7 @@ VOID GetGridSize(UINT &cx, UINT &cy)
     cy = adjustedBlockSize * grid_cy;
 }
 
-VOID ResizeGridWindowResize(RECT rcClient)
+BOOL SizeGridToWindow(RECT rcClient)
 {
     int newGridCX = RECTWIDTH(rcClient) / adjustedBlockSize;
     int newGridCY = RECTHEIGHT(rcClient) / adjustedBlockSize;
@@ -54,10 +54,9 @@ VOID ResizeGridWindowResize(RECT rcClient)
         grid_cx = newGridCX;
         grid_cy = newGridCY;
 
-        if (bHandlingDpiChange) {
-            DbgPrintError("Error: Should not have to resize grid while handling a DPI change\n");
-        }
+        return TRUE;
     }
+    return FALSE;
 }
 
 VOID DrawGrid(HWND hwnd, HDC hdc)

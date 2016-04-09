@@ -12,7 +12,7 @@ VOID InitGrid(HWND);
 VOID DrawGrid(HWND hwnd, HDC hdc);
 VOID SetGridDpi(UINT DPI);
 VOID GetGridSize(UINT &cx, UINT &cy);
-VOID ResizeGridWindowResize(RECT rcClient);
+BOOL SizeGridToWindow(RECT rcClient);
 
 //
 // DPI related functions
