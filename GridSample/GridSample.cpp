@@ -2,10 +2,75 @@
 #include "stdafx.h"
 #include <windows.h>
 #include "GridSample.h"
+#include <Windowsx.h>
 
-WORD gPrevConsoleTextAttribs;
+
+BOOL bEnforceNoLargerThanWorkArea = FALSE;
+BOOL bEnforceEntirelyOnCurrentWorkArea = FALSE;
+BOOL bEnforceWindowPosWhilePosChanging = TRUE;
 
 
+BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
+{
+    BOOL ret = FALSE;
+
+    // Get monitor's work area
+    MONITORINFOEX mi;
+    mi.cbSize = sizeof(MONITORINFOEX);
+    if (!GetMonitorInfo(MonitorFromRect(prcWindow, MONITOR_DEFAULTTONEAREST), &mi)) {
+        DbgPrintError("GetMonitorInfo Failed.\n");
+        return FALSE;
+    }
+    RECT rcWork = mi.rcWork;
+
+    // Super Hack (invisible borders) TODO: what's the magic number?
+    int nudge_factor = 9;
+    rcWork.left -= nudge_factor;
+    rcWork.right += nudge_factor;
+    rcWork.bottom += nudge_factor;
+
+    // Restrict window size to work area size
+    if (bEnforceNoLargerThanWorkArea) {
+        if (PRECTWIDTH(prcWindow) > RECTWIDTH(rcWork)) {
+            prcWindow->right = prcWindow->left + RECTWIDTH(rcWork);
+            ret = TRUE;
+        }
+        if (PRECTHEIGHT(prcWindow) > RECTHEIGHT(rcWork)) {
+            prcWindow->bottom = prcWindow->top + RECTHEIGHT(rcWork);
+            ret = TRUE;
+        }
+    }
+
+    // Keep the window size from this point
+    int cx = PRECTWIDTH(prcWindow);
+    int cy = PRECTHEIGHT(prcWindow);
+
+    // Ensure window is entirely in work area
+    if (bEnforceEntirelyOnCurrentWorkArea) {
+        if (prcWindow->left < rcWork.left) {
+            prcWindow->left = rcWork.left;
+            prcWindow->right = prcWindow->left + cx;
+            ret = TRUE;
+        }
+        if (prcWindow->top < rcWork.top) {
+            prcWindow->top = rcWork.top;
+            prcWindow->bottom = prcWindow->top + cy;
+            ret = TRUE;
+        }
+        if (prcWindow->right > rcWork.right) {
+            prcWindow->right = rcWork.right;
+            prcWindow->left = prcWindow->right - cx;
+            ret = TRUE;
+        }
+        if (prcWindow->bottom > rcWork.bottom) {
+            prcWindow->bottom = rcWork.bottom;
+            prcWindow->top = prcWindow->bottom - cy;
+            ret = TRUE;
+        }
+    }
+
+    return ret;
+}
 
 BOOL GetWindowSizeForDesiredClientSize(
     HWND hwnd,
@@ -29,18 +94,37 @@ BOOL GetWindowSizeForDesiredClientSize(
     return FALSE;
 }
 
-
-VOID SizeWindowToGrid(HWND hwnd)
+VOID AdjustWindowSizeAroundPoint(PRECT prcWindow, POINT pt)
 {
+
+    // Goal: adjust rcWindow to have new ideal window size,
+    // while keeping the window on the current monitor,
+    // and under the cursor
+
+    // Get the current cursor offset from the window's origin
+    //int dx = pptResizeAround->x - rcWindow.left;
+    //int dy = pptResizeAround->y - rcWindow.top;
+
+
+    //dx *= windowCX / (float)RECTWIDTH(rcWindow);
+    //dy *= windowCY / (float)RECTHEIGHT(rcWindow);
+    //
+    //rcWindow.left = pptResizeAround->x - dx;
+    //rcWindow.top = pptResizeAround->y - dy;
+    //rcWindow.right = rcWindow.left + windowCX;
+    //rcWindow.bottom = rcWindow.top + windowCY;
+    //
+    //// Error if the cursor isn't within the new window size
+    //if (!PtInRect(&rcWindow, *pptResizeAround)) {
+    //    DbgPrintError("Failed to keep cursor in window while resizing.\n");
+    //}
+}
+
+VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
+{
+    // Determine ideal client size
     UINT gridCX, gridCY;
     GetGridSize(gridCX, gridCY);
-
-    // Return early if current client size is already the correct size
-    RECT rcClient;
-    GetClientRect(hwnd, &rcClient);
-    if (RECTWIDTH(rcClient) == gridCX && RECTHEIGHT(rcClient) == gridCY) {
-        return;
-    }
 
     // Use AdjustWindowRectExForDpi to get new window size
     UINT windowCX, windowCY;
@@ -52,12 +136,26 @@ VOID SizeWindowToGrid(HWND hwnd)
     // Print the change in window size
     RECT rcWindow;
     GetWindowRect(hwnd, &rcWindow);
-    DbgPrint("Snapping window size to grid size\n\told size: %i x %i\n\tnew size: %i x %i\n",
-        RECTWIDTH(rcWindow), RECTHEIGHT(rcWindow), windowCX, windowCY);
+    UINT prevWindowCX = RECTWIDTH(rcWindow);
+    UINT prevWindowCY = RECTHEIGHT(rcWindow);
 
-    // Nudge out (or in) the bottom right corner to correct the window size
-    rcWindow.right = rcWindow.left + windowCX;
-    rcWindow.bottom = rcWindow.top + windowCY;
+    // Adjust window size, either around the cursor, or by nudging the bottom/right corner
+    if (pptResizeAround) {
+        AdjustWindowSizeAroundPoint(&rcWindow, *pptResizeAround);
+    } else {
+        rcWindow.right = rcWindow.left + windowCX;
+        rcWindow.bottom = rcWindow.top + windowCY;
+    }
+
+    // Before moving the window, enforce window position restrictions
+    if (EnforceWindowPosRestrictions(&rcWindow)) {
+        DbgPrint("Nudged window position to keep window on current monitor.\n");
+    }
+
+    if (prevWindowCX != windowCX || prevWindowCY != windowCY) {
+        DbgPrint("Changing window size to fit grid.\n   -->prev size: %i x %i\n   -->new size: %i x %i\n",
+            windowCX, windowCY, prevWindowCX, prevWindowCY);
+    }
 
     // Set new window position
     SetWindowPos(hwnd, NULL,
@@ -66,63 +164,17 @@ VOID SizeWindowToGrid(HWND hwnd)
         RECTWIDTH(rcWindow),
         RECTHEIGHT(rcWindow),
         SWP_SHOWWINDOW);
+}
 
-    // Error if the new client size doesn't match the grid size
-    GetClientRect(hwnd, &rcClient);
-    if (gridCX != RECTWIDTH(rcClient) ||
-        gridCY != RECTHEIGHT(rcClient)) {
-
-        DbgPrintError("Error, after setting initial window pos, client size didn't match expected.\n");
-        DbgPrintError("-->wanted %i x %i\n", gridCX, gridCY);
-        DbgPrintError("-->actual %i x %i\n", RECTWIDTH(rcClient), RECTHEIGHT(rcClient));
+VOID HandleMouseWheel(HWND hwnd, INT delta, BOOL bControl, POINT ptCursorScreen)
+{
+    if (bControl) {
+        AdjustGridSize(delta);
+    } else {
+        AdjustBaseBlockSize(delta);
     }
 
-
-    // Determine window size to fit grid
-    RECT rc = { 0, 0, gridCX, gridCY };
-    if (AdjustWindowRectExForDpi_l(&rc,
-        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
-        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
-        FALSE, GetDpiForWindow_l(hwnd))) {
-
-        UINT cx = RECTWIDTH(rc);
-        UINT cy = RECTHEIGHT(rc);
-        DbgPrint("Calculated window size: %i x %i\n", cx, cy);
-
-        // Extend current window rect to new size
-        GetWindowRect(hwnd, &rc);
-        rc.right = rc.left + cx;
-        rc.bottom = rc.top + cy;
-        DbgPrint("Setting new window position... [%i, %i, %i, %i]\n",
-            rc.left, rc.top, rc.right, rc.bottom);
-
-        // Set new window position
-        SetWindowPos(hwnd, NULL,
-            rc.left,
-            rc.top,
-            RECTWIDTH(rc),
-            RECTHEIGHT(rc),
-            SWP_SHOWWINDOW);
-
-        // Error if the new client size doesn't match the grid size
-        GetClientRect(hwnd, &rcClient);
-        if (gridCX != RECTWIDTH(rcClient) ||
-            gridCY != RECTHEIGHT(rcClient)) {
-
-            DbgPrintError("Error, after setting initial window pos, client size didn't match expected.\n");
-            DbgPrintError("-->wanted %i x %i\n", gridCX, gridCY);
-            DbgPrintError("-->actual %i x %i\n", RECTWIDTH(rcClient), RECTHEIGHT(rcClient));
-
-            // Sanity check (did we not get the correct window size?
-            RECT rcWindow;
-            GetWindowRect(hwnd, &rcWindow);
-            if (!EqualRect(&rcWindow, &rc)) {
-                DbgPrintError("maybe setting initial window position didn't take?\n");
-                DbgPrintError("-->wanted %i x %i\n", RECTWIDTH(rc), RECTHEIGHT(rc));
-                DbgPrintError("-->actual %i x %i\n", RECTWIDTH(rcWindow), RECTHEIGHT(rcWindow));
-            }
-        }
-    }
+    SizeWindowToGrid(hwnd, &ptCursorScreen);
 }
 
 VOID InitWindow(HWND hwnd)
@@ -133,15 +185,12 @@ VOID InitWindow(HWND hwnd)
     
     InitGrid(hwnd);
 
-    SizeWindowToGrid(hwnd);
+    SizeWindowToGrid(hwnd, NULL);
 }
 
 VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
 {
-    static UINT gDPI = 96;
-    DbgPrint("Handling a DPI change (new: %i, old: %i)\n",
-        DPI, gDPI);
-    gDPI = DPI;
+    DbgPrint("Handling a DPI change (DPI: %i)\n", DPI);
 
     // Update grid with new DPI
     SetGridDpi(DPI);
@@ -152,23 +201,6 @@ VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
                  prc->right - prc->left,
                  prc->bottom - prc->top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-VOID HandleMinMaxInfo(PMINMAXINFO pmmi)
-{
-
-    // TODO: limit the size of the window to the current monitor's work area
-
-
-
-
-
-
-
-
-
-
-
 }
 
 VOID Draw(HWND hwnd, HDC hdc)
@@ -210,41 +242,64 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     }
 
-    case WM_EXITSIZEMOVE:
     case WM_WINDOWPOSCHANGING:
+    {
+        PWINDOWPOS pwp = (WINDOWPOS*)lParam;
+
+        // TODO look up this hack bit that's really being checked here
+        bTrackSnap = pwp->flags > 1000;
+
+        if (bEnforceWindowPosWhilePosChanging) {
+            RECT rcNewWindowRect = { pwp->x, pwp->y, pwp->x + pwp->cx, pwp->y + pwp->cy };
+            if (EnforceWindowPosRestrictions(&rcNewWindowRect)) {
+                pwp->x = rcNewWindowRect.left;
+                pwp->y = rcNewWindowRect.top;
+                pwp->cx = RECTWIDTH(rcNewWindowRect);
+                pwp->cy = RECTHEIGHT(rcNewWindowRect);
+
+                DbgPrint("Restricted resize while handling WINDOWPOSCHANGING.\n");
+            }
+        }
+        break;
+    }
+    
     case WM_WINDOWPOSCHANGED:
     {
-        // WindowPosChanging has some secret high bit we can use to
-        // hint whether or not we're in the process of being snapped
-        if (message == WM_WINDOWPOSCHANGING) {
-            // TODO look up the bit that's being set
-            bTrackSnap = ((WINDOWPOS*)lParam)->flags > 1000;
-        }
-
         // Resize the grid to the new window size
         RECT rcClient;
         GetClientRect(hwnd, &rcClient);
         if (SizeGridToWindow(rcClient) && bHandlingDpiChange) {
             DbgPrintError("Error: resized grid while handling a DPI change.");
         }
-
-        // If the last WindowPosChanging didn't looked like a snap,
-        // snap the window size to fit the grid
-        if (message == WM_EXITSIZEMOVE && !bTrackSnap) {
-            SizeWindowToGrid(hwnd);
-        }
         break;
     }
 
-    case WM_GETMINMAXINFO:
-        HandleMinMaxInfo((PMINMAXINFO)lParam);
+    case WM_EXITSIZEMOVE:
+
+        // If being resized, but not snapped, resize the window
+        if (!bTrackSnap) {
+            SizeWindowToGrid(hwnd, NULL);
+        }
         break;
 
     case WM_MOUSEWHEEL:
-        //HandleMouseWheel(hwnd,
-        //    GET_KEYSTATE_WPARAM(wParam) | MK_CONTROL,
-        //    GET_WHEEL_DELTA_WPARAM(wParam));
-        break;
+    {
+        BOOL bControl = GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL;
+        
+        INT delta = GET_WHEEL_DELTA_WPARAM(wParam);
+        static INT _delta = 0;
+        _delta += delta;
+
+        if (_delta <= -120 || _delta >= 120) {
+            BOOL bUp = _delta > 0;
+            _delta -= (bUp ? 120 : -120);
+
+            POINT ptCursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+
+            HandleMouseWheel(hwnd, (bUp ? 1 : -1), bControl, ptCursor);
+        }
+    }
+    break;
 
     case WM_DESTROY:
         PostQuitMessage(0);

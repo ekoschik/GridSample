@@ -3,7 +3,7 @@
 #include "GridSample.h"
 
 // Block size
-int blockSizeModifier = 15;
+int blockSizeModifier = 7;
 int baseBlockSize = 40;
 int adjustedBlockSize = baseBlockSize;
 
@@ -15,6 +15,9 @@ HBRUSH hbrGrid1, hbrGrid2;
 COLORREF rgbGrid1 = RGB(0, 51, 204); // blue
 COLORREF rgbGrid2 = RGB(204, 153, 0); // dark yellow
 
+// The grid tracks it's DPI which it (loosely) uses as a scale factor
+int gCurrentDpi = 96;
+
 int GetBlockSizeForDpi(UINT dpi)
 {
     int linearScaled = ScaleToPhys(dpi, baseBlockSize);
@@ -23,16 +26,14 @@ int GetBlockSizeForDpi(UINT dpi)
 
 VOID SetGridDpi(UINT DPI)
 {
+    gCurrentDpi = DPI;
     adjustedBlockSize = GetBlockSizeForDpi(DPI);
-    DbgPrint("Set new block size: %i\n", adjustedBlockSize);
+    DbgPrint("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
 }
 
-VOID InitGrid(HWND hwnd)
+int GetBlockSizeForCurrentDpi()
 {
-    hbrGrid1 = CreateSolidBrush(rgbGrid1);
-    hbrGrid2 = CreateSolidBrush(rgbGrid2);
-
-    SetGridDpi(GetDpiForWindow_l(hwnd));
+    return GetBlockSizeForDpi(gCurrentDpi);
 }
 
 VOID GetGridSize(UINT &cx, UINT &cy)
@@ -41,6 +42,33 @@ VOID GetGridSize(UINT &cx, UINT &cy)
     cy = adjustedBlockSize * grid_cy;
 }
 
+
+// Wheel messages, AdjustBaseBlockSize and AdjustGridSize
+VOID AdjustBaseBlockSize(INT delta)
+{
+    // Adjust base block size, enforcing a reasonable minimum
+    const static int minBlockSize = blockSizeModifier * 2;
+    baseBlockSize = EnforceMinimumValue(baseBlockSize + (blockSizeModifier * delta), minBlockSize);
+    adjustedBlockSize = GetBlockSizeForCurrentDpi();
+
+    DbgPrint("Set new logical block size: %i (adjusted: %i)\n", baseBlockSize, adjustedBlockSize);
+}
+
+VOID AdjustGridSize(INT delta)
+{
+    int grid_cx_prev = grid_cx,
+        grid_cy_prev = grid_cy;
+
+    // Adjust the number of rows & columns, both by delta, enforcing at least a 1x1 grid
+    grid_cx = EnforceMinimumValue(grid_cx + delta, 1);
+    grid_cy = EnforceMinimumValue(grid_cy + delta, 1);
+
+    // Print the new and old grid size
+    DbgPrint("Set new grid rows/cols (%i x %i), prev: (%i x %i)\n",
+        grid_cx, grid_cy, grid_cx_prev, grid_cy_prev);
+}
+
+// SizeGridToWindow forcefully sets the grid size to best fit the current window size
 BOOL SizeGridToWindow(RECT rcClient)
 {
     int newGridCX = RECTWIDTH(rcClient) / adjustedBlockSize;
@@ -59,6 +87,7 @@ BOOL SizeGridToWindow(RECT rcClient)
     return FALSE;
 }
 
+// Drawing and Initialization Functions
 VOID DrawGrid(HWND hwnd, HDC hdc)
 {
     BOOL bColor1 = TRUE;
@@ -82,4 +111,12 @@ VOID DrawGrid(HWND hwnd, HDC hdc)
         rcCur.bottom += adjustedBlockSize;
         bColor1 = (y % 2 == 1);
     }
+}
+
+VOID InitGrid(HWND hwnd)
+{
+    hbrGrid1 = CreateSolidBrush(rgbGrid1);
+    hbrGrid2 = CreateSolidBrush(rgbGrid2);
+
+    SetGridDpi(GetDpiForWindow_l(hwnd));
 }
