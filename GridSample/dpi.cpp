@@ -25,12 +25,12 @@ BOOL InitProcessDpiAwareness()
     pfnAdjustWindowRectExForDpi =
         (fnTypeAdjustWindowRectExForDpi)GetProcAddress(hModUser32, (LPCSTR)2580);
     if (pfnAdjustWindowRectExForDpi) {
-        DbgPrint("  ---> found AdjustWindowRectExForDpi (by ordinal).\n");
+        DbgPrint("%sfound AdjustWindowRectExForDpi (by ordinal).\n", INDENT);
     } else {
         pfnAdjustWindowRectExForDpi =
             (fnTypeAdjustWindowRectExForDpi)GetProcAddress(hModUser32, "AdjustWindowRectExForDpi");
         if (pfnAdjustWindowRectExForDpi) {
-            DbgPrint("  ---> found AdjustWindowRectExForDpi.\n");
+            DbgPrint("%sfound AdjustWindowRectExForDpi.\n", INDENT);
         }
     }
 
@@ -38,11 +38,11 @@ BOOL InitProcessDpiAwareness()
     pfnGetDpiForWindow =
         (fnTypeGetDpiForWindow)GetProcAddress(hModUser32, "GetDpiForWindow");
     if (pfnGetDpiForWindow) {
-        DbgPrint("  ---> found GetDpiForWindow.\n");
+        DbgPrint("%sfound GetDpiForWindow.\n", INDENT);
     } else {
         pfnGetDpiForWindow = (fnTypeGetDpiForWindow)GetProcAddress(hModUser32, "GetWindowDPI");
         if (pfnGetDpiForWindow) {
-            DbgPrint("  ---> found GetDpiForWindow. (named GetWindowDPI)\n");
+            DbgPrint("%sfound GetDpiForWindow. (named GetWindowDPI)\n", INDENT);
         }
     }
 
@@ -52,9 +52,9 @@ BOOL InitProcessDpiAwareness()
     fnEnableBroadcasting =
         (fnTypeEnableBroadcasting)GetProcAddress(hModUser32, "EnableChildWindowDpiMessage");
     if (fnEnableNCScaling) {
-        DbgPrint("  ---> found EnableNonClientDpiScaling.\n");
+        DbgPrint("%sfound EnableNonClientDpiScaling.\n", INDENT);
     } else if (fnEnableBroadcasting){
-        DbgPrint("  ---> found EnableChildWindowDpiMessage.\n");
+        DbgPrint("%sfound EnableChildWindowDpiMessage.\n", INDENT);
     }
 
     // Determine which DPI awareness to use

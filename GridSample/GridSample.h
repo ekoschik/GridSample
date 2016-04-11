@@ -83,6 +83,8 @@ __inline void ResetConsoleColor(WORD gPrevConsoleTextAttribs) {
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), gPrevConsoleTextAttribs);
 }
 
+#define INDENT "  ---> "
+
 #define ErrorTextApptribs   BACKGROUND_RED/*| FOREGROUND_RED */| BACKGROUND_INTENSITY
 #define DbgPrintError(...)  { \
                                 WORD gPrevConsoleTextAttribs; \

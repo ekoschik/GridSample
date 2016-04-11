@@ -81,6 +81,7 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
     UINT windowCX = RECTWIDTH(rc),
          windowCY = RECTHEIGHT(rc);
 
+    // Start with the current window size
     RECT rcWindow;
     GetWindowRect(hwnd, &rcWindow);
     UINT prevWindowCX = RECTWIDTH(rcWindow);
@@ -105,12 +106,13 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
 
     // Before moving the window, enforce window position restrictions
     if (EnforceWindowPosRestrictions(&rcWindow)) {
-        DbgPrint("Nudged window position to keep window on current monitor.\n");
+        DbgPrint("Nudged window position to enforce window position restrictions.\n");
     }
 
     // Print the change in window size
     if (prevWindowCX != windowCX || prevWindowCY != windowCY) {
-        DbgPrint("Changing window size to fit grid.\n   --> prev size: %i x %i\n   --> new size: %i x %i\n",
+        DbgPrint("Changing window size to fit grid.\n");
+        DbgPrint("   -- > prev size : %i x %i\n   -- > new size: %i x %i\n",
             windowCX, windowCY, prevWindowCX, prevWindowCY);
     } 
 
@@ -135,6 +137,7 @@ VOID ApplyWindowRestrictionsForPosChanging(PWINDOWPOS pwp)
 
     // TODO: do something about how the cursor drifts when
     // keeping the window on the monitor while being dragged??
+    // (when keeping window on monitor)
 
 }
 
@@ -171,6 +174,8 @@ VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
 
     // Update grid with new DPI
     SetGridDpi(DPI);
+
+    // TODO: API needed
 
     // Adjust window size for DPI change
     SetWindowPos(hwnd, NULL,

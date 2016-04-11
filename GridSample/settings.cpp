@@ -51,17 +51,17 @@ BOOL InitSettingsFromArgs(int argc, char* argv[])
         DbgPrint("Running in mode:\n");
 
         DbgPrint(bAllowResize ?
-            "  ---> allow resize\n" :
-            "  ---> locked window size\n");
+            "%sallow resize\n" :
+            "%slocked window size\n", INDENT);
         DbgPrint(bSnapWindowSizeToGrid ? 
-            "  ---> snap window to grid\n" :
-            "  ---> allow free resizing of client area\n");
+            "%ssnap window to grid\n" :
+            "%sallow free resizing of client area\n", INDENT);
         DbgPrint(bLimitWindowSizeToMonitorSize ?
-            "  ---> limit window size to monitor size\n" :
-            "  ---> allow any window size\n");
+            "%slimit window size to monitor size\n" :
+            "%sallow any window size\n", INDENT);
         DbgPrint(bEnforceEntirelyOnMonitor ?
-            "  ---> keep window entirely on monitor\n" :
-            "  ---> allow window to straddle between monitors\n");
+            "%skeep window entirely on monitor\n" :
+            "%sallow window to straddle between monitors\n", INDENT);
 
     }
     return bHelp;
