@@ -152,7 +152,9 @@
     <ClCompile Include="dpi.cpp" />
     <ClCompile Include="grid.cpp" />
     <ClCompile Include="GridSample.cpp" />
+    <ClCompile Include="settings.cpp" />
     <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="window.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

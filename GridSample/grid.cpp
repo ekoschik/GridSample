@@ -42,8 +42,6 @@ VOID GetGridSize(UINT &cx, UINT &cy)
     cy = adjustedBlockSize * grid_cy;
 }
 
-
-// Wheel messages, AdjustBaseBlockSize and AdjustGridSize
 VOID AdjustBaseBlockSize(INT delta)
 {
     // Adjust base block size, enforcing a reasonable minimum
@@ -68,9 +66,11 @@ VOID AdjustGridSize(INT delta)
         grid_cx, grid_cy, grid_cx_prev, grid_cy_prev);
 }
 
-// SizeGridToWindow forcefully sets the grid size to best fit the current window size
-BOOL SizeGridToWindow(RECT rcClient)
+BOOL SizeGridToWindow(HWND hwnd)
 {
+    RECT rcClient;
+    GetClientRect(hwnd, &rcClient);
+
     int newGridCX = RECTWIDTH(rcClient) / adjustedBlockSize;
     int newGridCY = RECTHEIGHT(rcClient) / adjustedBlockSize;
 
@@ -82,12 +82,15 @@ BOOL SizeGridToWindow(RECT rcClient)
         grid_cx = newGridCX;
         grid_cy = newGridCY;
 
+        if (bHandlingDpiChange) {
+            DbgPrintError("Error: resized grid while handling a DPI change.");
+        }
+
         return TRUE;
     }
     return FALSE;
 }
 
-// Drawing and Initialization Functions
 VOID DrawGrid(HWND hwnd, HDC hdc)
 {
     BOOL bColor1 = TRUE;

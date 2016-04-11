@@ -1,6 +1,10 @@
 #pragma once
+
+
+
 #include <windows.h>
 #include <shellscalingapi.h>
+#include <Windowsx.h>
 
 #define RECTWIDTH(rc) (rc.right - rc.left)
 #define RECTHEIGHT(rc) (rc.bottom - rc.top)
@@ -11,6 +15,26 @@ __inline int EnforceMinimumValue(int val, int min) {
     return (val >= min) ? val : min;
 }
 
+
+//
+// Settings
+//
+extern BOOL bAllowResize;
+extern BOOL bSnapWindowSizeToGrid;
+extern BOOL bLimitWindowSizeToMonitorSize;
+extern BOOL bEnforceEntirelyOnMonitor;
+VOID InitSettingsFromArgs(int argc, char* argv[]);
+
+//
+// Window
+//
+VOID InitWindow(HWND hwnd);
+VOID Draw(HWND hwnd, HDC hdc);
+VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc);
+VOID ApplyWindowRestrictionsForPosChanging(PWINDOWPOS pwp);
+VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround);
+VOID HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam);
+
 //
 // Grid related functions
 //
@@ -18,7 +42,7 @@ VOID InitGrid(HWND);
 VOID DrawGrid(HWND hwnd, HDC hdc);
 VOID SetGridDpi(UINT DPI);
 VOID GetGridSize(UINT &cx, UINT &cy);
-BOOL SizeGridToWindow(RECT rcClient);
+BOOL SizeGridToWindow(HWND hwnd);
 VOID AdjustBaseBlockSize(INT delta);
 VOID AdjustGridSize(INT delta);
 
@@ -26,7 +50,6 @@ VOID AdjustGridSize(INT delta);
 //
 // DPI related functions
 //
-
 BOOL InitProcessDpiAwareness();
 BOOL EnableNonClientScalingForWindow(HWND hwnd);
 BOOL AdjustWindowRectExForDpi_l(LPRECT, DWORD, DWORD, BOOL, UINT DPI);
@@ -44,8 +67,8 @@ extern PROCESS_DPI_AWARENESS gpda;
 
 
 //
-// DbgPrint / DbgPrintError
-// 
+// Fancy console printing with macros DbgPrint / DbgPrintError
+//
 
 #define FOREGROUND_WHITE		    (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN)
 
@@ -77,7 +100,7 @@ __inline void ResetConsoleColor(WORD gPrevConsoleTextAttribs) {
                                 ResetConsoleColor(gPrevConsoleTextAttribs); \
                             }
 
-// other fun colors
+// other colors
 
 #define FOREGROUND_YELLOW       	(FOREGROUND_RED | FOREGROUND_GREEN)
 #define FOREGROUND_CYAN		        (FOREGROUND_BLUE | FOREGROUND_GREEN)
