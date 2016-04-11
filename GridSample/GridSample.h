@@ -67,7 +67,7 @@ extern PROCESS_DPI_AWARENESS gpda;
 
 
 //
-// Fancy console printing with macros DbgPrint / DbgPrintError
+// Fancy console printing with macros
 //
 
 __inline void SetConsoleColor(WORD Color, WORD &gPrevConsoleTextAttribs) {

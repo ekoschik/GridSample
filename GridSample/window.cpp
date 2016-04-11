@@ -34,9 +34,10 @@ BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
     }
 
     // Ensure window is entirely in work area (but keep the current size)
-    int cx = PRECTWIDTH(prcWindow);
-    int cy = PRECTHEIGHT(prcWindow);
     if (bEnforceEntirelyOnMonitor) {
+        int cx = PRECTWIDTH(prcWindow);
+        int cy = PRECTHEIGHT(prcWindow);
+
         if (prcWindow->left < rcWork.left) {
             prcWindow->left = rcWork.left;
             prcWindow->right = prcWindow->left + cx;
@@ -78,16 +79,16 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
         return;
     }
 
+    // Get new window size from AdjustWindowRectExForDpi output
     UINT windowCX = RECTWIDTH(rc),
          windowCY = RECTHEIGHT(rc);
 
-    // Start with the current window size
+    // Start with the current window position
     RECT rcWindow;
     GetWindowRect(hwnd, &rcWindow);
     UINT prevWindowCX = RECTWIDTH(rcWindow);
     UINT prevWindowCY = RECTHEIGHT(rcWindow);
 
-    // Adjust window size
     if (pptResizeAround) {
 
         // Resize window so that pptResizeAround is still in the same relative position
@@ -99,7 +100,7 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
         rcWindow.bottom = rcWindow.top + windowCY;
     } else {
 
-        // Nudge the bottom/right corner
+        // Keep same window origin, nad nudge the bottom/right corner to the correct size
         rcWindow.right = rcWindow.left + windowCX;
         rcWindow.bottom = rcWindow.top + windowCY;
     }
@@ -111,8 +112,8 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
 
     // Print the change in window size
     if (prevWindowCX != windowCX || prevWindowCY != windowCY) {
-        DbgPrintHiPri("Changing window size to fit grid.\n");
-        DbgPrintHiPri("%sprev size : %i x %i\n%snew size: %i x %i\n",
+        DbgPrint("Changing window size to fit grid.\n");
+        DbgPrint("%sprev size : %i x %i\n%snew size: %i x %i\n",
             INDENT, windowCX, windowCY, INDENT, prevWindowCX, prevWindowCY);
     } 
 
