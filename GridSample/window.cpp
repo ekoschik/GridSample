@@ -62,36 +62,6 @@ BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
     return ret;
 }
 
-BOOL GetWindowSizeForDesiredClientSize(
-    HWND hwnd,
-    UINT clientX,
-    UINT clientY,
-    UINT &windowX,
-    UINT &windowY)
-{
-    RECT rc = { 0, 0, clientX, clientY };
-
-    if (AdjustWindowRectExForDpi_l(&rc,
-        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
-        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
-        FALSE, GetDpiForWindow_l(hwnd))) {
-
-        windowX = RECTWIDTH(rc);
-        windowY = RECTHEIGHT(rc);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-VOID AdjustWindowSizeAroundPoint(PRECT prcWindow, POINT pt, UINT windowCX, UINT windowCY)
-{
-    prcWindow->left = pt.x - MulDiv(pt.x - prcWindow->left, windowCX, PRECTWIDTH(prcWindow));
-    prcWindow->top = pt.y - MulDiv(pt.y - prcWindow->top, windowCY, PRECTHEIGHT(prcWindow));
-    prcWindow->right = prcWindow->left + windowCX;
-    prcWindow->bottom = prcWindow->top + windowCY;
-}
-
 VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
 {
     // Determine ideal client size
@@ -99,22 +69,36 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
     GetGridSize(gridCX, gridCY);
 
     // Use AdjustWindowRectExForDpi to get new window size
-    UINT windowCX, windowCY;
-    if (!GetWindowSizeForDesiredClientSize(hwnd, gridCX, gridCY, windowCX, windowCY)) {
-        DbgPrintError("Failed to determine ideal window size.\n");
+    RECT rc = { 0, 0, gridCX, gridCY };
+    if (!AdjustWindowRectExForDpi_l(&rc,
+        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
+        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
+        FALSE, GetDpiForWindow_l(hwnd))) {
+        DbgPrintError("AdjustWindowRectExForDpi Failed.\n");
         return;
     }
 
-    // Print the change in window size
+    UINT windowCX = RECTWIDTH(rc),
+         windowCY = RECTHEIGHT(rc);
+
     RECT rcWindow;
     GetWindowRect(hwnd, &rcWindow);
     UINT prevWindowCX = RECTWIDTH(rcWindow);
     UINT prevWindowCY = RECTHEIGHT(rcWindow);
 
-    // Adjust window size, either around the cursor, or by nudging the bottom/right corner
+    // Adjust window size
     if (pptResizeAround) {
-        AdjustWindowSizeAroundPoint(&rcWindow, *pptResizeAround, windowCX, windowCY);
+
+        // Resize window so that pptResizeAround is still in the same relative position
+        rcWindow.left = pptResizeAround->x - 
+            MulDiv(pptResizeAround->x - rcWindow.left, windowCX, RECTWIDTH(rcWindow));
+        rcWindow.top = pptResizeAround->y -
+            MulDiv(pptResizeAround->y - rcWindow.top, windowCY, RECTHEIGHT(rcWindow));
+        rcWindow.right = rcWindow.left + windowCX;
+        rcWindow.bottom = rcWindow.top + windowCY;
     } else {
+
+        // Nudge the bottom/right corner
         rcWindow.right = rcWindow.left + windowCX;
         rcWindow.bottom = rcWindow.top + windowCY;
     }
@@ -124,10 +108,11 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
         DbgPrint("Nudged window position to keep window on current monitor.\n");
     }
 
+    // Print the change in window size
     if (prevWindowCX != windowCX || prevWindowCY != windowCY) {
-        DbgPrint("Changing window size to fit grid.\n   -->prev size: %i x %i\n   -->new size: %i x %i\n",
+        DbgPrint("Changing window size to fit grid.\n   --> prev size: %i x %i\n   --> new size: %i x %i\n",
             windowCX, windowCY, prevWindowCX, prevWindowCY);
-    }
+    } 
 
     // Set new window position
     SetWindowPos(hwnd, NULL,
@@ -149,6 +134,10 @@ VOID ApplyWindowRestrictionsForPosChanging(PWINDOWPOS pwp)
 
         DbgPrint("Restricted resize while handling WINDOWPOSCHANGING.\n");
     }
+
+    // TODO: do something about how the cursor drifts when
+    // keeping the window on the monitor while being dragged??
+
 }
 
 INT AccumulateMouseWheelDelta(WPARAM wParam) {

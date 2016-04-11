@@ -15,25 +15,18 @@ HBRUSH hbrGrid1, hbrGrid2;
 COLORREF rgbGrid1 = RGB(0, 51, 204); // blue
 COLORREF rgbGrid2 = RGB(204, 153, 0); // dark yellow
 
-// The grid tracks it's DPI which it (loosely) uses as a scale factor
-int gCurrentDpi = 96;
-
 int GetBlockSizeForDpi(UINT dpi)
 {
     int linearScaled = ScaleToPhys(dpi, baseBlockSize);
     return linearScaled - (linearScaled % blockSizeModifier);
 }
 
+int gCurrentDpi = 96;
 VOID SetGridDpi(UINT DPI)
 {
     gCurrentDpi = DPI;
     adjustedBlockSize = GetBlockSizeForDpi(DPI);
     DbgPrint("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
-}
-
-int GetBlockSizeForCurrentDpi()
-{
-    return GetBlockSizeForDpi(gCurrentDpi);
 }
 
 VOID GetGridSize(UINT &cx, UINT &cy)
@@ -47,7 +40,7 @@ VOID AdjustBaseBlockSize(INT delta)
     // Adjust base block size, enforcing a reasonable minimum
     const static int minBlockSize = blockSizeModifier * 2;
     baseBlockSize = EnforceMinimumValue(baseBlockSize + (blockSizeModifier * delta), minBlockSize);
-    adjustedBlockSize = GetBlockSizeForCurrentDpi();
+    adjustedBlockSize = GetBlockSizeForDpi(gCurrentDpi);
 
     DbgPrint("Set new logical block size: %i (adjusted: %i)\n", baseBlockSize, adjustedBlockSize);
 }

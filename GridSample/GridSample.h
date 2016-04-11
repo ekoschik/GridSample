@@ -15,7 +15,6 @@ __inline int EnforceMinimumValue(int val, int min) {
     return (val >= min) ? val : min;
 }
 
-
 //
 // Settings
 //
@@ -23,7 +22,7 @@ extern BOOL bAllowResize;
 extern BOOL bSnapWindowSizeToGrid;
 extern BOOL bLimitWindowSizeToMonitorSize;
 extern BOOL bEnforceEntirelyOnMonitor;
-VOID InitSettingsFromArgs(int argc, char* argv[]);
+BOOL InitSettingsFromArgs(int argc, char* argv[]);
 
 //
 // Window

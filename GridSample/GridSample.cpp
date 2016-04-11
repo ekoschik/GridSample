@@ -1,6 +1,5 @@
 
 #include "stdafx.h"
-#include <windows.h>
 #include "GridSample.h"
 
 
@@ -51,6 +50,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         HandleMouseWheel(hwnd, wParam, lParam);
         break;
 
+    case WM_LBUTTONDBLCLK:
+    {
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        SizeWindowToGrid(hwnd, &pt);
+        break;
+    }
+
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -64,7 +70,7 @@ HWND CreateMainWindow()
     LPWSTR WndClassName = _T("WndClass");
     LPWSTR WndTitle = _T("Grid Sample");
 
-    UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW /*| CS_DBLCLKS*/;
+    UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     DWORD WndStyleEx = 0;
     DWORD WndStyle = bAllowResize ? WS_OVERLAPPEDWINDOW :
         WS_OVERLAPPEDWINDOW ^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
@@ -109,14 +115,19 @@ HWND CreateMainWindow()
 
 int main(int argc, char* argv[])
 {
-    InitSettingsFromArgs(argc, argv);
+    // Read args, and return if "/?" was typed
+    if (InitSettingsFromArgs(argc, argv)) {
+        return 1;
+    }
 
+    // Load the DPI APIs and set the process DPI awareness
     BOOL bPMDpiAware = InitProcessDpiAwareness();
 
+    // Create the window and set it's title based on the awareness chosen
     HWND hwnd = CreateMainWindow();
-
-    LPCWSTR WindowTitle = bPMDpiAware ? _T("Grid Sample (PM)") : _T("Grid Sample (Sys)");
-    SetWindowText(hwnd, WindowTitle);
+    SetWindowText(hwnd, bPMDpiAware ?
+        _T("Grid Sample (PM)") :
+        _T("Grid Sample (Sys)"));
 
     MSG msg;
     DbgPrint("Entering Message Loop.\n");
@@ -124,6 +135,7 @@ int main(int argc, char* argv[])
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-    return msg.wParam;
+
+    return (int)msg.wParam;
 }
 
