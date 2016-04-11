@@ -26,7 +26,7 @@ VOID SetGridDpi(UINT DPI)
 {
     gCurrentDpi = DPI;
     adjustedBlockSize = GetBlockSizeForDpi(DPI);
-    DbgPrint("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
+    DbgPrintHiPri("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
 }
 
 VOID GetGridSize(UINT &cx, UINT &cy)
@@ -76,7 +76,7 @@ BOOL SizeGridToWindow(HWND hwnd)
         grid_cy = newGridCY;
 
         if (bHandlingDpiChange) {
-            DbgPrintError("Error: resized grid while handling a DPI change.");
+            DbgPrintError("Error: resized grid while handling a DPI change.\n");
         }
 
         return TRUE;

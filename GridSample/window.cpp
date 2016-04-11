@@ -111,8 +111,8 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
 
     // Print the change in window size
     if (prevWindowCX != windowCX || prevWindowCY != windowCY) {
-        DbgPrint("Changing window size to fit grid.\n");
-        DbgPrint("%sprev size : %i x %i\n%snew size: %i x %i\n",
+        DbgPrintHiPri("Changing window size to fit grid.\n");
+        DbgPrintHiPri("%sprev size : %i x %i\n%snew size: %i x %i\n",
             INDENT, windowCX, windowCY, INDENT, prevWindowCX, prevWindowCY);
     } 
 
@@ -170,7 +170,7 @@ VOID HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam)
 
 VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
 {
-    DbgPrint("Handling a DPI change (DPI: %i)\n", DPI);
+    DbgPrintHiPri("Handling a DPI change (DPI: %i)\n", DPI);
 
     // Update grid with new DPI
     SetGridDpi(DPI);
@@ -202,7 +202,7 @@ VOID Draw(HWND hwnd, HDC hdc)
 VOID InitWindow(HWND hwnd)
 {
     UINT DPI = GetDpiForWindow_l(hwnd);
-    DbgPrint("Initializing window, DPI: %i (%i%%, %.2fx)\n",
+    DbgPrintHiPri("Initializing window, DPI: %i (%i%%, %.2fx)\n",
         DPI, DPIinPercentage(DPI), DPItoFloat(DPI));
 
     InitGrid(hwnd);

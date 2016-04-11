@@ -22,6 +22,7 @@ extern BOOL bAllowResize;
 extern BOOL bSnapWindowSizeToGrid;
 extern BOOL bLimitWindowSizeToMonitorSize;
 extern BOOL bEnforceEntirelyOnMonitor;
+extern BOOL bHideLowPriDbg;
 BOOL InitSettingsFromArgs(int argc, char* argv[]);
 
 //
@@ -69,8 +70,6 @@ extern PROCESS_DPI_AWARENESS gpda;
 // Fancy console printing with macros DbgPrint / DbgPrintError
 //
 
-#define FOREGROUND_WHITE		    (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN)
-
 __inline void SetConsoleColor(WORD Color, WORD &gPrevConsoleTextAttribs) {
     CONSOLE_SCREEN_BUFFER_INFO Info;
     HANDLE hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -85,21 +84,23 @@ __inline void ResetConsoleColor(WORD gPrevConsoleTextAttribs) {
 
 #define INDENT "  ---> "
 
-#define ErrorTextApptribs   BACKGROUND_RED/*| FOREGROUND_RED */| BACKGROUND_INTENSITY
-#define DbgPrintError(...)  { \
-                                WORD gPrevConsoleTextAttribs; \
-                                SetConsoleColor(ErrorTextApptribs, gPrevConsoleTextAttribs); \
-                                printf (__VA_ARGS__); \
-                                ResetConsoleColor(gPrevConsoleTextAttribs); \
-                            }
+#define DbgPrintImpl(attr, ...) { \
+                                  WORD gPrevConsoleTextAttribs; \
+                                  SetConsoleColor(attr, gPrevConsoleTextAttribs); \
+                                  printf (__VA_ARGS__); \
+                                  ResetConsoleColor(gPrevConsoleTextAttribs); \
+                                }
 
-#define RegTextApptribs     FOREGROUND_WHITE | FOREGROUND_INTENSITY
-#define DbgPrint(...)       { \
-                                WORD gPrevConsoleTextAttribs; \
-                                SetConsoleColor(RegTextApptribs, gPrevConsoleTextAttribs); \
-                                printf (__VA_ARGS__); \
-                                ResetConsoleColor(gPrevConsoleTextAttribs); \
-                            }
+#define DbgPrintError(...)  DbgPrintImpl(BACKGROUND_RED/*| FOREGROUND_RED */| BACKGROUND_INTENSITY, __VA_ARGS__)
+
+#define FOREGROUND_WHITE    (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN)
+
+#define DbgPrint(...)       if(!bHideLowPriDbg) { DbgPrintImpl(FOREGROUND_WHITE, __VA_ARGS__); }
+
+#define DbgPrintHiPri(...)  DbgPrintImpl(FOREGROUND_WHITE | FOREGROUND_INTENSITY, __VA_ARGS__)
+
+
+#define RegTextApptribs     
 
 // other colors
 
