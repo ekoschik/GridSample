@@ -19,16 +19,21 @@ BOOL InitProcessDpiAwareness()
 {
     HMODULE hModUser32 = GetModuleHandle(_T("user32.dll"));
 
+    DbgPrint("Loading new DPI APIs...");
+
+
+
+
     // Load AdjustWindowRectExForDpi (which was originally exported by ordinal)
     pfnAdjustWindowRectExForDpi =
         (fnTypeAdjustWindowRectExForDpi)GetProcAddress(hModUser32, (LPCSTR)2580);
     if (pfnAdjustWindowRectExForDpi) {
-        DbgPrint("Found AdjustWindowRectExForDpi (by ordinal).\n");
+        DbgPrint("  ---> found AdjustWindowRectExForDpi (by ordinal).\n");
     } else {
         pfnAdjustWindowRectExForDpi =
             (fnTypeAdjustWindowRectExForDpi)GetProcAddress(hModUser32, "AdjustWindowRectExForDpi");
         if (pfnAdjustWindowRectExForDpi) {
-            DbgPrint("Found AdjustWindowRectExForDpi.\n");
+            DbgPrint("  ---> found AdjustWindowRectExForDpi.\n");
         }
     }
 
@@ -36,11 +41,11 @@ BOOL InitProcessDpiAwareness()
     pfnGetDpiForWindow =
         (fnTypeGetDpiForWindow)GetProcAddress(hModUser32, "GetDpiForWindow");
     if (pfnGetDpiForWindow) {
-        DbgPrint("Found GetDpiForWindow.\n");
+        DbgPrint("  ---> found GetDpiForWindow.\n");
     } else {
         pfnGetDpiForWindow = (fnTypeGetDpiForWindow)GetProcAddress(hModUser32, "GetWindowDPI");
         if (pfnGetDpiForWindow) {
-            DbgPrint("Found GetDpiForWindow. (named GetWindowDPI)\n");
+            DbgPrint("  ---> found GetDpiForWindow. (named GetWindowDPI)\n");
         }
     }
 
@@ -50,9 +55,9 @@ BOOL InitProcessDpiAwareness()
     fnEnableBroadcasting =
         (fnTypeEnableBroadcasting)GetProcAddress(hModUser32, "EnableChildWindowDpiMessage");
     if (fnEnableNCScaling) {
-        DbgPrint("Found EnableNonClientDpiScaling.\n");
+        DbgPrint("  ---> found EnableNonClientDpiScaling.\n");
     } else if (fnEnableBroadcasting){
-        DbgPrint("Found EnableChildWindowDpiMessage.\n");
+        DbgPrint("  ---> found EnableChildWindowDpiMessage.\n");
     }
 
     // Determine which DPI awareness to use

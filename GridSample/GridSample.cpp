@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
         _T("Grid Sample (Sys)"));
 
     MSG msg;
-    DbgPrint("Entering Message Loop.\n");
+    DbgPrint("Entering Message Loop.\n\n");
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);

@@ -131,8 +131,6 @@ VOID ApplyWindowRestrictionsForPosChanging(PWINDOWPOS pwp)
         pwp->y = rcNewWindowRect.top;
         pwp->cx = RECTWIDTH(rcNewWindowRect);
         pwp->cy = RECTHEIGHT(rcNewWindowRect);
-
-        DbgPrint("Restricted resize while handling WINDOWPOSCHANGING.\n");
     }
 
     // TODO: do something about how the cursor drifts when
