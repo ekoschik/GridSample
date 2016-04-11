@@ -19,7 +19,7 @@ BOOL InitProcessDpiAwareness()
 {
     HMODULE hModUser32 = GetModuleHandle(_T("user32.dll"));
 
-    DbgPrint("Loading new DPI APIs...");
+    DbgPrint("Loading new DPI APIs...\n");
 
     // Load AdjustWindowRectExForDpi (which was originally exported by ordinal)
     pfnAdjustWindowRectExForDpi =

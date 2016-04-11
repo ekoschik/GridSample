@@ -112,8 +112,8 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
     // Print the change in window size
     if (prevWindowCX != windowCX || prevWindowCY != windowCY) {
         DbgPrint("Changing window size to fit grid.\n");
-        DbgPrint("   -- > prev size : %i x %i\n   -- > new size: %i x %i\n",
-            windowCX, windowCY, prevWindowCX, prevWindowCY);
+        DbgPrint("%sprev size : %i x %i\n%snew size: %i x %i\n",
+            INDENT, windowCX, windowCY, INDENT, prevWindowCX, prevWindowCY);
     } 
 
     // Set new window position
