@@ -21,9 +21,6 @@ BOOL InitProcessDpiAwareness()
 
     DbgPrint("Loading new DPI APIs...");
 
-
-
-
     // Load AdjustWindowRectExForDpi (which was originally exported by ordinal)
     pfnAdjustWindowRectExForDpi =
         (fnTypeAdjustWindowRectExForDpi)GetProcAddress(hModUser32, (LPCSTR)2580);

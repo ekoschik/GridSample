@@ -4,7 +4,7 @@
 
 BOOL bAllowResize = TRUE;
 BOOL bSnapWindowSizeToGrid = FALSE;
-BOOL bLimitWindowSizeToMonitorSize = FALSE;
+BOOL bLimitWindowSizeToMonitorSize = TRUE;
 BOOL bEnforceEntirelyOnMonitor = FALSE;
 
 BOOL InitSettingsFromArgs(int argc, char* argv[])
@@ -24,7 +24,7 @@ BOOL InitSettingsFromArgs(int argc, char* argv[])
         if (TestArg("-SnapToGrid") || TestArg("/SnapToGrid")) {
             bSnapWindowSizeToGrid = TRUE;
         }
-        if (TestArg("-LimitWindowSize") || TestArg("/LimitWindowSize")) {
+        if (TestArg("-DontLimitWindowSize") || TestArg("/DontLimitWindowSize")) {
             bLimitWindowSizeToMonitorSize = TRUE;
         }
         if (TestArg("-KeepOnMonitor") || TestArg("/KeepOnMonitor")) {
@@ -41,7 +41,7 @@ BOOL InitSettingsFromArgs(int argc, char* argv[])
         DbgPrint("options:\n");
         DbgPrint("-NoResize\t - Don't allow resizing of the window\n");
         DbgPrint("-SnapToGrid\t - After beign resized, snap window to the grid size\n");
-        DbgPrint("-LimitWindowSize - Limit the window size to the work area of the current monitor\n");
+        DbgPrint("-DontLimitWindowSize - Allow any indow size (by default, limit to work area of the current monitor)\n");
         DbgPrint("-KeepOnMonitor\t - Always keep the entire window on the current monitor\n");
         
     } else {
