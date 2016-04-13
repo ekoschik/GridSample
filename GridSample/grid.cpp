@@ -2,6 +2,9 @@
 #include "stdafx.h"
 #include "GridSample.h"
 
+
+BOOL bInit = FALSE;
+
 // Block size
 int blockSizeModifier = 7;
 int baseBlockSize = 40;
@@ -61,6 +64,11 @@ VOID AdjustGridSize(INT delta)
 
 BOOL SizeGridToWindow(HWND hwnd)
 {
+    // TODO: make this cleaner.  essentially, a WINDOWPOSCHANGED is coming
+    // in during initialization, causing SizeGridToWindow to happen before
+    // SizeWindowToGrid
+    if (!bInit) return FALSE;
+
     RECT rcClient;
     GetClientRect(hwnd, &rcClient);
 
@@ -111,6 +119,7 @@ VOID DrawGrid(HWND hwnd, HDC hdc)
 
 VOID InitGrid(HWND hwnd)
 {
+    bInit = TRUE;
     hbrGrid1 = CreateSolidBrush(rgbGrid1);
     hbrGrid2 = CreateSolidBrush(rgbGrid2);
 

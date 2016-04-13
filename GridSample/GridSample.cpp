@@ -5,12 +5,14 @@
 
 BOOL bHandlingDpiChange = FALSE;
 BOOL bTrackSnap = FALSE;
+BOOL bTrackMoveSize = FALSE;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message) {
 
     case WM_CREATE:
+        EnableNonClientScalingForWindow(hwnd);
         InitWindow(hwnd);
         break;
 
@@ -39,11 +41,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_WINDOWPOSCHANGED:
         SizeGridToWindow(hwnd);
         break;
+    
+    case WM_ENTERSIZEMOVE:
+        bTrackMoveSize = TRUE;
+        break;
 
     case WM_EXITSIZEMOVE:
         if (bSnapWindowSizeToGrid && !bTrackSnap) {
             SizeWindowToGrid(hwnd, NULL);
         }
+        bTrackMoveSize = FALSE;
         break;
 
     case WM_MOUSEWHEEL:
@@ -106,7 +113,6 @@ HWND CreateMainWindow()
         return NULL;
     }
 
-    EnableNonClientScalingForWindow(hwnd);
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
 

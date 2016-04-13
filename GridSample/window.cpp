@@ -2,6 +2,94 @@
 #include "stdafx.h"
 #include "GridSample.h"
 
+BOOL GetWindowSizeForCurrentGridSize(HWND hwnd, UINT &cx, UINT &cy)
+{
+    // Determine ideal client size
+    UINT gridCX, gridCY;
+    GetGridSize(gridCX, gridCY);
+
+    // Use AdjustWindowRectExForDpi to get new window size
+    RECT rc = { 0, 0, gridCX, gridCY };
+    if (!AdjustWindowRectExForDpi_l(&rc,
+        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
+        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
+        FALSE, GetDpiForWindow_l(hwnd))) {
+        DbgPrintError("AdjustWindowRectExForDpi Failed.\n");
+        return FALSE;
+    }
+
+    // Get new window size from AdjustWindowRectExForDpi output
+    cx = RECTWIDTH(rc);
+    cy = RECTHEIGHT(rc);
+    return TRUE;
+}
+
+VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
+{
+    // Note: called from WM_DPICHANGED handler, and after grid has resized
+
+    UINT windowCX, windowCY;
+    if (!GetWindowSizeForCurrentGridSize(hwnd, windowCX, windowCY)) {
+        return;
+    }
+
+    // Start with the current window rect
+    RECT rcWindow;
+    GetWindowRect(hwnd, &rcWindow);
+
+    // Resizing the window rect should not change the monitor the window is on
+    HMONITOR hmonStart = MonitorFromRect(&rcWindow, MONITOR_DEFAULTTONEAREST);
+    RECT rcOrig = *prcSuggestion;
+
+    // Adjust the suggestion rect to have the ideal width/ height
+    POINT pt;
+    if (GetCursorPos(&pt) && bTrackMoveSize/*PtInRect(&rcWindow, pt)*/) {
+        ResizeRectAroundPoint(prcSuggestion, windowCX, windowCY, pt);
+        DbgPrintHiPri("Modified suggestion rect by transforming around point!\n");
+
+        if (!PtInRect(prcSuggestion, pt)) {
+            DbgPrintError("Error, after calling ResizeRectAroundPoint, pt no longer in rect!\n");
+        }
+
+    }
+    else {
+        prcSuggestion->right = prcSuggestion->left + windowCX;
+        prcSuggestion->bottom = prcSuggestion->top + windowCY;
+
+        DbgPrintHiPri("Modified suggestion rect by bumping bottom right corner...\n");
+    }
+
+    // Are we about to wobble?
+    HMONITOR hmonFinish = MonitorFromRect(prcSuggestion, MONITOR_DEFAULTTONEAREST);
+
+    if (hmonStart != hmonFinish) {
+        *prcSuggestion = rcOrig; // bail!
+        DbgPrintError("WOBBLE ALLERT!!!\n");
+    }
+
+}
+
+VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
+{
+    DbgPrintHiPri("Handling a DPI change (DPI: %i)\n", DPI);
+
+    // Update grid with new DPI
+    SetGridDpi(DPI);
+
+    // Now that grid has updated it's size, attempt to keep the
+    // new window rect from changing the grid size
+    RECT rcResize = *prc;
+    ResizeSuggestionRectForDpiChange(hwnd, &rcResize);
+
+    // Adjust window size for DPI change
+    SetWindowPos(hwnd, NULL,
+        rcResize.left,
+        rcResize.top,
+        RECTWIDTH(rcResize),
+        RECTHEIGHT(rcResize),
+        SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
 {
     BOOL ret = FALSE;
@@ -65,23 +153,11 @@ BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
 
 VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
 {
-    // Determine ideal client size
-    UINT gridCX, gridCY;
-    GetGridSize(gridCX, gridCY);
-
-    // Use AdjustWindowRectExForDpi to get new window size
-    RECT rc = { 0, 0, gridCX, gridCY };
-    if (!AdjustWindowRectExForDpi_l(&rc,
-        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
-        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
-        FALSE, GetDpiForWindow_l(hwnd))) {
-        DbgPrintError("AdjustWindowRectExForDpi Failed.\n");
+    // Calc window size that would perfectly fit the grid
+    UINT windowCX, windowCY;
+    if (!GetWindowSizeForCurrentGridSize(hwnd, windowCX, windowCY)) {
         return;
     }
-
-    // Get new window size from AdjustWindowRectExForDpi output
-    UINT windowCX = RECTWIDTH(rc),
-         windowCY = RECTHEIGHT(rc);
 
     // Start with the current window position
     RECT rcWindow;
@@ -92,12 +168,7 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
     if (pptResizeAround) {
 
         // Resize window so that pptResizeAround is still in the same relative position
-        rcWindow.left = pptResizeAround->x - 
-            MulDiv(pptResizeAround->x - rcWindow.left, windowCX, RECTWIDTH(rcWindow));
-        rcWindow.top = pptResizeAround->y -
-            MulDiv(pptResizeAround->y - rcWindow.top, windowCY, RECTHEIGHT(rcWindow));
-        rcWindow.right = rcWindow.left + windowCX;
-        rcWindow.bottom = rcWindow.top + windowCY;
+        ResizeRectAroundPoint(&rcWindow, windowCX, windowCY, *pptResizeAround);
     } else {
 
         // Keep same window origin, nad nudge the bottom/right corner to the correct size
@@ -167,23 +238,6 @@ VOID HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam)
         POINT ptCursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
         SizeWindowToGrid(hwnd, &ptCursor);
     }
-}
-
-VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
-{
-    DbgPrintHiPri("Handling a DPI change (DPI: %i)\n", DPI);
-
-    // Update grid with new DPI
-    SetGridDpi(DPI);
-
-    // TODO: API needed
-
-    // Adjust window size for DPI change
-    SetWindowPos(hwnd, NULL,
-        prc->left, prc->top,
-        prc->right - prc->left,
-        prc->bottom - prc->top,
-        SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 VOID Draw(HWND hwnd, HDC hdc)
