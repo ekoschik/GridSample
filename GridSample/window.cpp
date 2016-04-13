@@ -24,10 +24,28 @@ BOOL GetWindowSizeForCurrentGridSize(HWND hwnd, UINT &cx, UINT &cy)
     return TRUE;
 }
 
+VOID ResizeRectAroundPoint(PRECT prc, UINT cx, UINT cy, POINT pt)
+{
+    prc->left = pt.x - MulDiv(pt.x - prc->left, cx, PRECTWIDTH(prc));
+    prc->top = pt.y - MulDiv(pt.y - prc->top, cy, PRECTHEIGHT(prc));
+    prc->right = prc->left + cx;
+    prc->bottom = prc->top + cy;
+
+    if (!PtInRect(prc, pt)) {
+        DbgPrintError("ERROR: ResizeRectAroundPoint resulted in pt being outside of RECT???\n");
+    }
+}
+
 VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
 {
-    // Note: called from WM_DPICHANGED handler, and after grid has resized
+    // When handling a DPI change in the middle of being snapped, we
+    // should just let the snap do it's thing (so that the window is
+    // always in the position that the shell/user decided to give us).
+    if (bTrackSnap) {
+        return;
+    }
 
+    // Determine the ideal window size we want
     UINT windowCX, windowCY;
     if (!GetWindowSizeForCurrentGridSize(hwnd, windowCX, windowCY)) {
         return;
@@ -42,29 +60,22 @@ VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
     HMONITOR hmonStart = MonitorFromRect(&rcWindow, MONITOR_DEFAULTTONEAREST);
     RECT rcOrig = *prcSuggestion;
 
-    // Adjust the suggestion rect to have the ideal width/ height
+    // Get the current cursor position (which is NOT the position
+    // at the time this message was queued, unfortunatly...)
     POINT pt;
-    if (GetCursorPos(&pt) && bTrackMoveSize && PtInRect(&rcWindow, pt)) {
+    GetCursorPos(&pt);
+
+    if (PtInRect(&rcWindow, pt)) {
+
         ResizeRectAroundPoint(prcSuggestion, windowCX, windowCY, pt);
-        DbgPrintHiPri("Modified suggestion rect by transforming around point!\n");
 
-        if (!PtInRect(prcSuggestion, pt)) {
-            DbgPrintError("Error, after calling ResizeRectAroundPoint, pt no longer in rect!\n");
-        }
-
-        // TODO: 
-        // Internally, this kind of math is done with the queued cursor position,
-        // (the global cursor position at the time the message was queued).  This
-        // information is apparently not exposed... which sucks.  Without it,
-        // dragging quickly will causes cursor drift... (any hack we can do???)
-
-
+        // TODO: do something about how cursor is still drifting
+        // (maybe re-check for the cursor pos and shift if necessary?)
+        
     }
     else {
         prcSuggestion->right = prcSuggestion->left + windowCX;
         prcSuggestion->bottom = prcSuggestion->top + windowCY;
-
-        DbgPrintHiPri("Modified suggestion rect by bumping bottom right corner...\n");
     }
 
     // Are we about to wobble?
@@ -73,6 +84,11 @@ VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
     if (hmonStart != hmonFinish) {
         *prcSuggestion = rcOrig; // bail!
         DbgPrintError("WOBBLE ALLERT!!!\n");
+
+        // TODO: do something better here... can we attempt to move
+        // the ideal rect towords the original suggestion until they
+        // are on the same monitor???
+
     }
 
 }

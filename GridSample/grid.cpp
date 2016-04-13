@@ -84,7 +84,13 @@ BOOL SizeGridToWindow(HWND hwnd)
         grid_cy = newGridCY;
 
         if (bHandlingDpiChange) {
-            DbgPrintError("Error: resized grid while handling a DPI change.\n");
+
+            if (bTrackSnap) {
+                DbgPrint("Resizing grid during DPI change, but this is a SNAP, so let it go...\n");
+            } else {
+                DbgPrintError("Error: resized grid while handling a DPI change.\n");
+            }
+
         }
 
         return TRUE;

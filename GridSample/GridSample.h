@@ -15,14 +15,6 @@ __inline int EnforceMinimumValue(int val, int min) {
     return (val >= min) ? val : min;
 }
 
-__inline VOID ResizeRectAroundPoint(PRECT prc, UINT cx, UINT cy, POINT pt)
-{
-    prc->left = pt.x - MulDiv(pt.x - prc->left, cx, PRECTWIDTH(prc));
-    prc->top = pt.y - MulDiv(pt.y - prc->top, cy, PRECTHEIGHT(prc));
-    prc->right = prc->left + cx;
-    prc->bottom = prc->top + cy;
-}
-
 
 //
 // Settings
@@ -65,6 +57,7 @@ BOOL AdjustWindowRectExForDpi_l(LPRECT, DWORD, DWORD, BOOL, UINT DPI);
 UINT GetDpiForWindow_l(HWND hwnd);
 extern BOOL bHandlingDpiChange;
 extern BOOL bTrackMoveSize;
+extern BOOL bTrackSnap;
 extern PROCESS_DPI_AWARENESS gpda;
 
 #define IsProcessPerMonitorDpiAware() (gpda == PROCESS_PER_MONITOR_DPI_AWARE)
