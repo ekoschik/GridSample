@@ -19,18 +19,18 @@ BOOL InitProcessDpiAwareness()
 {
     HMODULE hModUser32 = GetModuleHandle(_T("user32.dll"));
 
-    DbgPrintHiPri("Loading new DPI APIs...\n");
+    DbgPrint("Loading new DPI APIs...\n");
 
     // Load AdjustWindowRectExForDpi (which was originally exported by ordinal)
     pfnAdjustWindowRectExForDpi =
         (fnTypeAdjustWindowRectExForDpi)GetProcAddress(hModUser32, (LPCSTR)2580);
     if (pfnAdjustWindowRectExForDpi) {
-        DbgPrintHiPri("%sfound AdjustWindowRectExForDpi (by ordinal).\n", INDENT);
+        DbgPrint("%sfound AdjustWindowRectExForDpi (by ordinal).\n", INDENT);
     } else {
         pfnAdjustWindowRectExForDpi =   
             (fnTypeAdjustWindowRectExForDpi)GetProcAddress(hModUser32, "AdjustWindowRectExForDpi");
         if (pfnAdjustWindowRectExForDpi) {
-            DbgPrintHiPri("%sfound AdjustWindowRectExForDpi.\n", INDENT);
+            DbgPrint("%sfound AdjustWindowRectExForDpi.\n", INDENT);
         }
     }
 
@@ -38,11 +38,11 @@ BOOL InitProcessDpiAwareness()
     pfnGetDpiForWindow =
         (fnTypeGetDpiForWindow)GetProcAddress(hModUser32, "GetDpiForWindow");
     if (pfnGetDpiForWindow) {
-        DbgPrintHiPri("%sfound GetDpiForWindow.\n", INDENT);
+        DbgPrint("%sfound GetDpiForWindow.\n", INDENT);
     } else {
         pfnGetDpiForWindow = (fnTypeGetDpiForWindow)GetProcAddress(hModUser32, "GetWindowDPI");
         if (pfnGetDpiForWindow) {
-            DbgPrintHiPri("%sfound GetDpiForWindow. (named GetWindowDPI)\n", INDENT);
+            DbgPrint("%sfound GetDpiForWindow. (named GetWindowDPI)\n", INDENT);
         }
     }
 
@@ -52,9 +52,9 @@ BOOL InitProcessDpiAwareness()
     fnEnableBroadcasting =
         (fnTypeEnableBroadcasting)GetProcAddress(hModUser32, "EnableChildWindowDpiMessage");
     if (fnEnableNCScaling) {
-        DbgPrintHiPri("%sfound EnableNonClientDpiScaling.\n", INDENT);
+        DbgPrint("%sfound EnableNonClientDpiScaling.\n", INDENT);
     } else if (fnEnableBroadcasting){
-        DbgPrintHiPri("%sfound EnableChildWindowDpiMessage.\n", INDENT);
+        DbgPrint("%sfound EnableChildWindowDpiMessage.\n", INDENT);
     }
 
     // Determine which DPI awareness to use
@@ -63,10 +63,10 @@ BOOL InitProcessDpiAwareness()
     // Call SetProcessDpiAwareness
     HRESULT ret;
     if(bSetSystemAware) {
-        DbgPrintHiPri("Setting process as System DPI Aware.\n");
+        DbgPrint("Setting process as System DPI Aware.\n");
         ret = SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
     } else {
-        DbgPrintHiPri("Setting process as Per Monitor DPI Aware.\n");
+        DbgPrint("Setting process as Per Monitor DPI Aware.\n");
         ret = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     }
     if (ret != S_OK) {
@@ -95,7 +95,7 @@ BOOL EnableNonClientScalingForWindow(HWND hwnd)
         ret = fnEnableNCScaling(hwnd);
 
         if (ret) {
-            DbgPrintHiPri("Enabled NonClient Scaling (using EnableNonClientDpiScaling)\n");
+            DbgPrint("Enabled NonClient Scaling (using EnableNonClientDpiScaling)\n");
         } else {
             DbgPrintError("EnableNonClientDpiScaling failed!\n");
         }
@@ -104,7 +104,7 @@ BOOL EnableNonClientScalingForWindow(HWND hwnd)
         ret = fnEnableBroadcasting(hwnd, TRUE);
         
         if (ret) {
-            DbgPrintHiPri("Enabled NonClient Scaling (using EnableChildWindowDpiMessage)\n");
+            DbgPrint("Enabled NonClient Scaling (using EnableChildWindowDpiMessage)\n");
         } else {
             DbgPrintError("EnableChildWindowDpiMessage failed!\n");
         }

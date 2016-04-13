@@ -101,7 +101,7 @@ BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
     rcWork.bottom += nudge_factor;
 
     // Restrict window size to work area size
-    if (bLimitWindowSizeToMonitorSize) {
+    if (bRestrictToMonitorSize) {
 
         // TODO: recognize which side should be modified (aka, if resizing, which side is being resized?)
 
@@ -116,7 +116,7 @@ BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
     }
 
     // Ensure window is entirely in work area (but keep the current size)
-    if (bEnforceEntirelyOnMonitor) {
+    if (bAlwaysEntirelyOnMonitor) {
         int cx = PRECTWIDTH(prcWindow);
         int cy = PRECTHEIGHT(prcWindow);
 
@@ -195,7 +195,8 @@ VOID Window::HandleDpiChange(UINT DPI, RECT* prc)
 {
     bHandlingDpiChange = TRUE;
 
-    DbgPrintHiPri("Handling a DPI change (DPI: %i)\n", DPI);
+    DbgPrint("Handling a DPI change (DPI: %i)\n", DPI);
+    dpi = DPI;
 
     // Update grid with new DPI
     SetGridDpi(DPI);
@@ -249,7 +250,7 @@ VOID Window::HandleEnterExitMoveSize(BOOL bEnter)
     if (bEnter) {
         bTrackMoveSize = TRUE;
     } else {
-        if (bSnapWindowSizeToGrid && !bTrackSnap) {
+        if (bSnapWindowToGrid && !bTrackSnap) {
             SizeWindowToGrid(NULL);
         }
         bTrackMoveSize = FALSE;
@@ -299,7 +300,7 @@ VOID Window::Create(HWND _hwnd)
     hwnd = _hwnd;
 
     dpi = GetDpiForWindow_l(hwnd);
-    DbgPrintHiPri("Initializing window, DPI: %i (%i%%, %.2fx)\n",
+    DbgPrint("Initializing window, DPI: %i (%i%%, %.2fx)\n",
         dpi, DPIinPercentage(dpi), DPItoFloat(dpi));
 
     EnableNonClientScalingForWindow(hwnd);

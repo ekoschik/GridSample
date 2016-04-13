@@ -53,14 +53,9 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         break;
     
     case WM_ENTERSIZEMOVE:
-        if (LOOKUPWINDOW) {
-            WINDOWPTR->HandleEnterExitMoveSize(TRUE);
-        }
-        break;
-
     case WM_EXITSIZEMOVE:
         if (LOOKUPWINDOW) {
-            WINDOWPTR->HandleEnterExitMoveSize(FALSE);
+            WINDOWPTR->HandleEnterExitMoveSize(message == WM_ENTERSIZEMOVE);
         }
         break;
 
@@ -85,34 +80,29 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-Window::Window()
+Window::Window(
+    BOOL _bResize,
+    BOOL _bSnapWindowToGrid,
+    BOOL _bRestrictToMonitorSize,
+    BOOL _bAlwaysEntirelyOnMonitor)
 {
+    bResize = _bResize;
+    bSnapWindowToGrid = _bSnapWindowToGrid;
+    bRestrictToMonitorSize = _bRestrictToMonitorSize;
+    bAlwaysEntirelyOnMonitor = _bAlwaysEntirelyOnMonitor;
+
     LPWSTR WndClassName = _T("WndClass");
     LPWSTR WndTitle = _T("Grid Sample");
-
     HINSTANCE hinst = GetModuleHandle(NULL);
-    UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
-    DWORD WndStyleEx = 0;
-    DWORD WndStyle = bAllowResize ? WS_OVERLAPPEDWINDOW :
-        WS_OVERLAPPEDWINDOW ^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
 
-    static BOOL bRegistered = FALSE;
-    if (!bRegistered) {
-
-        WNDCLASSEX wcex = { 0 };
-        wcex.cbSize = sizeof(WNDCLASSEX);
-        wcex.style = WndClassStyle;
-        wcex.lpfnWndProc = WndProc;
-        wcex.hInstance = hinst;
-        wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        wcex.lpszClassName = WndClassName;
-        if (!RegisterClassEx(&wcex)) {
-            DbgPrintError("Error: RegisterClassEx Failed.\n");
-            return;
-        }
-
-        bRegistered = TRUE;
+    if (!EnsureWindowIsRegistered(hinst, WndClassName)) {
+        DbgPrintError("Error: RegisterClassEx Failed.\n");
+        return;
     }
+
+    DWORD WndStyleEx = 0;
+    DWORD WndStyle = _bResize ? WS_OVERLAPPEDWINDOW :
+        WS_OVERLAPPEDWINDOW ^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
 
     int x = CW_USEDEFAULT,
         y = CW_USEDEFAULT,
@@ -125,40 +115,55 @@ Window::Window()
         WndTitle,
         WndStyle,
         x, y, cx, cy,
-        nullptr, nullptr, hinst, 
-        this);
+        nullptr, nullptr, hinst, nullptr);
 
     if (!hwnd) {
         DbgPrintError("Error: CreateWindowEx Failed.\n");
         return;
     }
 
-    SetWindowText(hwnd, bPMDpiAware ?
-        _T("Grid Sample (PM)") :
-        _T("Grid Sample (Sys)"));
-
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
 
 }
 
+BOOL Window::EnsureWindowIsRegistered(HINSTANCE hinst, LPWSTR WndClassName)
+{
+    // It is only necessary to register the window class once
+    static BOOL bRegistered = FALSE;
+    if (!bRegistered) {
+        UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+        WNDCLASSEX wcex = { 0 };
+        wcex.cbSize = sizeof(WNDCLASSEX);
+        wcex.style = WndClassStyle;
+        wcex.lpfnWndProc = WndProc;
+        wcex.hInstance = hinst;
+        wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wcex.lpszClassName = WndClassName;
+        if (RegisterClassEx(&wcex)) {
+            bRegistered = TRUE;
+        }
+    }
+    return bRegistered;
+}
+
 int main(int argc, char* argv[])
 {
-    // Read args, and return immediately if "/?" was typed
+    // Read args, and return immediately if help menu was shown
     if (InitSettingsFromArgs(argc, argv)) {
         return 1;
     }
 
     // Load the DPI APIs and set the process DPI awareness
-    bPMDpiAware = InitProcessDpiAwareness();
+    InitProcessDpiAwareness();
 
-    // Create the window
-    Window wnd;
-    //Window wnd1;
+    // Create the windows
+    Window wnd(TRUE,TRUE,FALSE,FALSE);
+    Window wnd1(TRUE, FALSE, FALSE, TRUE);
 
     // Message pump
     MSG msg;
-    DbgPrintHiPri("Entering Message Loop.\n\n");
+    DbgPrint("Entering Message Loop.\n\n");
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);

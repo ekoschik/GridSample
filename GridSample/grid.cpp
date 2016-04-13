@@ -29,7 +29,7 @@ VOID SetGridDpi(UINT DPI)
 {
     gCurrentDpi = DPI;
     adjustedBlockSize = GetBlockSizeForDpi(DPI);
-    DbgPrintHiPri("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
+    DbgPrint("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
 }
 
 VOID GetGridSize(UINT &cx, UINT &cy)

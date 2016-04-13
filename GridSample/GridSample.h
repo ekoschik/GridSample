@@ -20,22 +20,16 @@ __inline VOID ResizeRectAroundPoint(PRECT prc, UINT cx, UINT cy, POINT pt) {
     prc->bottom = prc->top + cy;
 }
 
-//
-// Settings
-//
-extern BOOL bAllowResize;
-extern BOOL bSnapWindowSizeToGrid;
-extern BOOL bLimitWindowSizeToMonitorSize;
-extern BOOL bEnforceEntirelyOnMonitor;
-extern BOOL bHideLowPriDbg;
-extern BOOL bPMDpiAware;
 BOOL InitSettingsFromArgs(int argc, char* argv[]);
 
 
 class Window
 {
 public:
-    Window();
+    Window(BOOL bResize,
+           BOOL bSnapWindowToGrid,
+           BOOL bRestrictToMonitorSize,
+           BOOL bAlwaysEntirelyOnMonitor);
 
     // Handling window messages
     VOID Draw(HDC hdc);
@@ -51,15 +45,20 @@ public:
     VOID ResizeSuggestionRectForDpiChange(PRECT prcSuggestion);
     BOOL EnforceWindowPosRestrictions(PRECT prcWindow);
     VOID SizeWindowToGrid(PPOINT pptResizeAround);
-
-
+    
 private:
 
     VOID Create(HWND _hwnd);
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+    static BOOL EnsureWindowIsRegistered(HINSTANCE,LPWSTR);
 
     HWND hwnd;
     UINT dpi;
+
+    BOOL bResize;
+    BOOL bSnapWindowToGrid;
+    BOOL bRestrictToMonitorSize;
+    BOOL bAlwaysEntirelyOnMonitor;
 
     BOOL bHandlingDpiChange = FALSE;
     BOOL bTrackSnap = FALSE;
@@ -127,10 +126,7 @@ __inline void ResetConsoleColor(WORD gPrevConsoleTextAttribs) {
 #define DbgPrintError(...)  DbgPrintImpl(BACKGROUND_RED/*| FOREGROUND_RED */| BACKGROUND_INTENSITY, __VA_ARGS__)
 
 #define FOREGROUND_WHITE    (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN)
-
-#define DbgPrintHiPri(...)  DbgPrintImpl(FOREGROUND_WHITE | FOREGROUND_INTENSITY, __VA_ARGS__)
-
-#define DbgPrint(...)       if(!bHideLowPriDbg) { DbgPrintHiPri(__VA_ARGS__); }
+#define DbgPrint(...)       DbgPrintImpl(FOREGROUND_WHITE | FOREGROUND_INTENSITY, __VA_ARGS__)
 
 
 #define RegTextApptribs     
