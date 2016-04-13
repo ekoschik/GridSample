@@ -9,7 +9,6 @@ map<HWND, Window*> WindowMap;
 
 LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    Window* pWindow;
     map<HWND, Window*>::iterator it;
 #define LOOKUPWINDOW    (it = WindowMap.find(hwnd)) != WindowMap.end()
 #define WINDOWPTR       (it->second)
@@ -17,11 +16,14 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     switch (message) {
 
     case WM_CREATE:
-        if (pWindow = new Window()) {
+    {
+        Window* pWindow = (Window*)(((CREATESTRUCT*)lParam)->lpCreateParams);
+        if (pWindow) {
             WindowMap.insert(pair<HWND, Window*>(hwnd, pWindow));
             pWindow->Create(hwnd);
         }
         break;
+    }
 
     case WM_DPICHANGED:
         if (LOOKUPWINDOW) {
@@ -88,22 +90,28 @@ Window::Window()
     LPWSTR WndClassName = _T("WndClass");
     LPWSTR WndTitle = _T("Grid Sample");
 
+    HINSTANCE hinst = GetModuleHandle(NULL);
     UINT WndClassStyle = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
     DWORD WndStyleEx = 0;
     DWORD WndStyle = bAllowResize ? WS_OVERLAPPEDWINDOW :
         WS_OVERLAPPEDWINDOW ^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
 
-    HINSTANCE hinst = GetModuleHandle(NULL);
-    WNDCLASSEX wcex = { 0 };
-    wcex.cbSize = sizeof(WNDCLASSEX);
-    wcex.style = WndClassStyle;
-    wcex.lpfnWndProc = WndProc;
-    wcex.hInstance = hinst;
-    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wcex.lpszClassName = WndClassName;
-    if (!RegisterClassEx(&wcex)) {
-        DbgPrintError("Error: RegisterClassEx Failed.\n");
-        return;
+    static BOOL bRegistered = FALSE;
+    if (!bRegistered) {
+
+        WNDCLASSEX wcex = { 0 };
+        wcex.cbSize = sizeof(WNDCLASSEX);
+        wcex.style = WndClassStyle;
+        wcex.lpfnWndProc = WndProc;
+        wcex.hInstance = hinst;
+        wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        wcex.lpszClassName = WndClassName;
+        if (!RegisterClassEx(&wcex)) {
+            DbgPrintError("Error: RegisterClassEx Failed.\n");
+            return;
+        }
+
+        bRegistered = TRUE;
     }
 
     int x = CW_USEDEFAULT,
@@ -117,7 +125,8 @@ Window::Window()
         WndTitle,
         WndStyle,
         x, y, cx, cy,
-        nullptr, nullptr, hinst, nullptr);
+        nullptr, nullptr, hinst, 
+        this);
 
     if (!hwnd) {
         DbgPrintError("Error: CreateWindowEx Failed.\n");
@@ -130,6 +139,7 @@ Window::Window()
 
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
+
 }
 
 int main(int argc, char* argv[])
@@ -144,6 +154,7 @@ int main(int argc, char* argv[])
 
     // Create the window
     Window wnd;
+    //Window wnd1;
 
     // Message pump
     MSG msg;

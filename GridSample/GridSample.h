@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include <windows.h>
 #include <shellscalingapi.h>
 #include <Windowsx.h>
