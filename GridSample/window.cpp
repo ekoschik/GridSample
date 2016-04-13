@@ -37,19 +37,27 @@ VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
     RECT rcWindow;
     GetWindowRect(hwnd, &rcWindow);
 
-    // Resizing the window rect should not change the monitor the window is on
+    // Forcefully ensure that resizing the window rect for a DPI
+    // does not change the monitor the window is on
     HMONITOR hmonStart = MonitorFromRect(&rcWindow, MONITOR_DEFAULTTONEAREST);
     RECT rcOrig = *prcSuggestion;
 
     // Adjust the suggestion rect to have the ideal width/ height
     POINT pt;
-    if (GetCursorPos(&pt) && bTrackMoveSize/*PtInRect(&rcWindow, pt)*/) {
+    if (GetCursorPos(&pt) && bTrackMoveSize && PtInRect(&rcWindow, pt)) {
         ResizeRectAroundPoint(prcSuggestion, windowCX, windowCY, pt);
         DbgPrintHiPri("Modified suggestion rect by transforming around point!\n");
 
         if (!PtInRect(prcSuggestion, pt)) {
             DbgPrintError("Error, after calling ResizeRectAroundPoint, pt no longer in rect!\n");
         }
+
+        // TODO: 
+        // Internally, this kind of math is done with the queued cursor position,
+        // (the global cursor position at the time the message was queued).  This
+        // information is apparently not exposed... which sucks.  Without it,
+        // dragging quickly will causes cursor drift... (any hack we can do???)
+
 
     }
     else {
@@ -111,6 +119,9 @@ BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
 
     // Restrict window size to work area size
     if (bLimitWindowSizeToMonitorSize) {
+
+        // TODO: recognize which side should be modified (aka, if resizing, which side is being resized?)
+
         if (PRECTWIDTH(prcWindow) > RECTWIDTH(rcWork)) {
             prcWindow->right = prcWindow->left + RECTWIDTH(rcWork);
             ret = TRUE;
