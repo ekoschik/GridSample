@@ -34,8 +34,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_WINDOWPOSCHANGING:
         ApplyWindowRestrictionsForPosChanging((WINDOWPOS*)lParam);
 
-        // Hack! TODO look up this hack bit that's really being checked here
-        bTrackSnap = ((WINDOWPOS*)lParam)->flags > 1000;
+// Hack Alert! using a private win32k window arrangement bit...
+#define SWP_POSARRANGEDWINDOW 0x00100000 // TODO: get rid of this
+        bTrackSnap = ((WINDOWPOS*)lParam)->flags & SWP_POSARRANGEDWINDOW;
         break;
     
     case WM_WINDOWPOSCHANGED:
