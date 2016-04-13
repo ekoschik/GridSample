@@ -2,12 +2,12 @@
 #include "stdafx.h"
 #include "GridSample.h"
 
+BOOL bPMDpiAware;
 BOOL bAllowResize = TRUE;
 BOOL bSnapWindowSizeToGrid = FALSE;
 BOOL bLimitWindowSizeToMonitorSize = TRUE;
 BOOL bEnforceEntirelyOnMonitor = FALSE;
 BOOL bHideLowPriDbg = FALSE;
-
 
 BOOL InitSettingsFromArgs(int argc, char* argv[])
 {

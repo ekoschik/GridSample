@@ -1,69 +1,79 @@
 
 #include "stdafx.h"
 #include "GridSample.h"
+#include <map>
 
+using namespace std;
 
-BOOL bHandlingDpiChange = FALSE;
-BOOL bTrackSnap = FALSE;
-BOOL bTrackMoveSize = FALSE;
+map<HWND, Window*> WindowMap;
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    Window* pWindow;
+    map<HWND, Window*>::iterator it;
+#define LOOKUPWINDOW    (it = WindowMap.find(hwnd)) != WindowMap.end()
+#define WINDOWPTR       (it->second)
+
     switch (message) {
 
     case WM_CREATE:
-        EnableNonClientScalingForWindow(hwnd);
-        InitWindow(hwnd);
+        if (pWindow = new Window()) {
+            WindowMap.insert(pair<HWND, Window*>(hwnd, pWindow));
+            pWindow->Create(hwnd);
+        }
         break;
 
     case WM_DPICHANGED:
-        bHandlingDpiChange = TRUE;
-        HandleDpiChange(hwnd, HIWORD(wParam), (RECT*)lParam);
-        bHandlingDpiChange = FALSE;
+        if (LOOKUPWINDOW) {
+            WINDOWPTR->HandleDpiChange(HIWORD(wParam), (RECT*)lParam);
+        }
         break;
 
     case WM_PAINT:
-    {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-        Draw(hwnd, hdc);
-        EndPaint(hwnd, &ps);
+        if (LOOKUPWINDOW) {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            WINDOWPTR->Draw(hdc);
+            EndPaint(hwnd, &ps);
+        }
         break;
-    }
 
     case WM_WINDOWPOSCHANGING:
-        ApplyWindowRestrictionsForPosChanging((WINDOWPOS*)lParam);
-
-// Hack Alert! using a private win32k window arrangement bit...
-#define SWP_POSARRANGEDWINDOW 0x00100000 // TODO: get rid of this
-        bTrackSnap = ((WINDOWPOS*)lParam)->flags & SWP_POSARRANGEDWINDOW;
+        if (LOOKUPWINDOW) {
+            WINDOWPTR->HandleWindowPosChanging((WINDOWPOS*)lParam);
+        }
         break;
     
     case WM_WINDOWPOSCHANGED:
-        SizeGridToWindow(hwnd);
+        if (LOOKUPWINDOW) {
+            WINDOWPTR->HandleWindowPosChanged();
+        }
         break;
     
     case WM_ENTERSIZEMOVE:
-        bTrackMoveSize = TRUE;
+        if (LOOKUPWINDOW) {
+            WINDOWPTR->HandleEnterExitMoveSize(TRUE);
+        }
         break;
 
     case WM_EXITSIZEMOVE:
-        if (bSnapWindowSizeToGrid && !bTrackSnap) {
-            SizeWindowToGrid(hwnd, NULL);
+        if (LOOKUPWINDOW) {
+            WINDOWPTR->HandleEnterExitMoveSize(FALSE);
         }
-        bTrackMoveSize = FALSE;
         break;
 
     case WM_MOUSEWHEEL:
-        HandleMouseWheel(hwnd, wParam, lParam);
+        if (LOOKUPWINDOW) {
+            WINDOWPTR->HandleMouseWheel(hwnd, wParam, lParam);
+        }
         break;
 
     case WM_LBUTTONDBLCLK:
-    {
-        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        SizeWindowToGrid(hwnd, &pt);
+        if (LOOKUPWINDOW) {
+            POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+            WINDOWPTR->HandleDoubleClick(pt);
+        }
         break;
-    }
 
     case WM_DESTROY:
         PostQuitMessage(0);
@@ -73,7 +83,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-HWND CreateMainWindow()
+Window::Window()
 {
     LPWSTR WndClassName = _T("WndClass");
     LPWSTR WndTitle = _T("Grid Sample");
@@ -93,7 +103,7 @@ HWND CreateMainWindow()
     wcex.lpszClassName = WndClassName;
     if (!RegisterClassEx(&wcex)) {
         DbgPrintError("Error: RegisterClassEx Failed.\n");
-        return NULL;
+        return;
     }
 
     int x = CW_USEDEFAULT,
@@ -111,31 +121,31 @@ HWND CreateMainWindow()
 
     if (!hwnd) {
         DbgPrintError("Error: CreateWindowEx Failed.\n");
-        return NULL;
+        return;
     }
+
+    SetWindowText(hwnd, bPMDpiAware ?
+        _T("Grid Sample (PM)") :
+        _T("Grid Sample (Sys)"));
 
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
-
-    return hwnd;
 }
 
 int main(int argc, char* argv[])
 {
-    // Read args, and return if "/?" was typed
+    // Read args, and return immediately if "/?" was typed
     if (InitSettingsFromArgs(argc, argv)) {
         return 1;
     }
 
     // Load the DPI APIs and set the process DPI awareness
-    BOOL bPMDpiAware = InitProcessDpiAwareness();
+    bPMDpiAware = InitProcessDpiAwareness();
 
-    // Create the window and set it's title based on the awareness chosen
-    HWND hwnd = CreateMainWindow();
-    SetWindowText(hwnd, bPMDpiAware ?
-        _T("Grid Sample (PM)") :
-        _T("Grid Sample (Sys)"));
+    // Create the window
+    Window wnd;
 
+    // Message pump
     MSG msg;
     DbgPrintHiPri("Entering Message Loop.\n\n");
     while (GetMessage(&msg, nullptr, 0, 0)) {

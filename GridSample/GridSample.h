@@ -15,6 +15,12 @@ __inline int EnforceMinimumValue(int val, int min) {
     return (val >= min) ? val : min;
 }
 
+__inline VOID ResizeRectAroundPoint(PRECT prc, UINT cx, UINT cy, POINT pt) {
+    prc->left = pt.x - MulDiv(pt.x - prc->left, cx, PRECTWIDTH(prc));
+    prc->top = pt.y - MulDiv(pt.y - prc->top, cy, PRECTHEIGHT(prc));
+    prc->right = prc->left + cx;
+    prc->bottom = prc->top + cy;
+}
 
 //
 // Settings
@@ -24,17 +30,46 @@ extern BOOL bSnapWindowSizeToGrid;
 extern BOOL bLimitWindowSizeToMonitorSize;
 extern BOOL bEnforceEntirelyOnMonitor;
 extern BOOL bHideLowPriDbg;
+extern BOOL bPMDpiAware;
 BOOL InitSettingsFromArgs(int argc, char* argv[]);
 
-//
-// Window
-//
-VOID InitWindow(HWND hwnd);
-VOID Draw(HWND hwnd, HDC hdc);
-VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc);
-VOID ApplyWindowRestrictionsForPosChanging(PWINDOWPOS pwp);
-VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround);
-VOID HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam);
+
+class Window
+{
+public:
+    Window();
+
+    // Handling window messages
+    VOID Draw(HDC hdc);
+    VOID HandleDpiChange(UINT DPI, RECT* prc);
+    VOID HandleWindowPosChanging(PWINDOWPOS pwp);
+    VOID HandleWindowPosChanged();
+    VOID HandleEnterExitMoveSize(BOOL bEnter);
+    VOID HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam);
+    VOID HandleDoubleClick(POINT pt);
+
+    // Helper routines
+    BOOL GetWindowSizeForCurrentGridSize(UINT &cx, UINT &cy);
+    VOID ResizeSuggestionRectForDpiChange(PRECT prcSuggestion);
+    BOOL EnforceWindowPosRestrictions(PRECT prcWindow);
+    VOID SizeWindowToGrid(PPOINT pptResizeAround);
+
+
+private:
+
+    VOID Create(HWND _hwnd);
+    static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+
+    HWND hwnd;
+    UINT dpi;
+
+    BOOL bHandlingDpiChange = FALSE;
+    BOOL bTrackSnap = FALSE;
+    BOOL bTrackMoveSize = FALSE;
+
+    INT mw_delta; // for WM_MOUSEWHEEL
+};
+
 
 //
 // Grid related functions
@@ -55,9 +90,6 @@ BOOL InitProcessDpiAwareness();
 BOOL EnableNonClientScalingForWindow(HWND hwnd);
 BOOL AdjustWindowRectExForDpi_l(LPRECT, DWORD, DWORD, BOOL, UINT DPI);
 UINT GetDpiForWindow_l(HWND hwnd);
-extern BOOL bHandlingDpiChange;
-extern BOOL bTrackMoveSize;
-extern BOOL bTrackSnap;
 extern PROCESS_DPI_AWARENESS gpda;
 
 #define IsProcessPerMonitorDpiAware() (gpda == PROCESS_PER_MONITOR_DPI_AWARE)

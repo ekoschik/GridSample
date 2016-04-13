@@ -2,14 +2,14 @@
 #include "stdafx.h"
 #include "GridSample.h"
 
-BOOL GetWindowSizeForCurrentGridSize(HWND hwnd, UINT &cx, UINT &cy)
+BOOL Window::GetWindowSizeForCurrentGridSize(UINT &cx, UINT &cy)
 {
     // Determine ideal client size
     UINT gridCX, gridCY;
     GetGridSize(gridCX, gridCY);
 
     // Use AdjustWindowRectExForDpi to get new window size
-    RECT rc = { 0, 0, gridCX, gridCY };
+    RECT rc = { 0, 0, (LONG)gridCX, (LONG)gridCY };
     if (!AdjustWindowRectExForDpi_l(&rc,
         (DWORD)GetWindowLong(hwnd, GWL_STYLE),
         (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
@@ -24,19 +24,7 @@ BOOL GetWindowSizeForCurrentGridSize(HWND hwnd, UINT &cx, UINT &cy)
     return TRUE;
 }
 
-VOID ResizeRectAroundPoint(PRECT prc, UINT cx, UINT cy, POINT pt)
-{
-    prc->left = pt.x - MulDiv(pt.x - prc->left, cx, PRECTWIDTH(prc));
-    prc->top = pt.y - MulDiv(pt.y - prc->top, cy, PRECTHEIGHT(prc));
-    prc->right = prc->left + cx;
-    prc->bottom = prc->top + cy;
-
-    if (!PtInRect(prc, pt)) {
-        DbgPrintError("ERROR: ResizeRectAroundPoint resulted in pt being outside of RECT???\n");
-    }
-}
-
-VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
+VOID Window::ResizeSuggestionRectForDpiChange(PRECT prcSuggestion)
 {
     // When handling a DPI change in the middle of being snapped, we
     // should just let the snap do it's thing (so that the window is
@@ -47,7 +35,7 @@ VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
 
     // Determine the ideal window size we want
     UINT windowCX, windowCY;
-    if (!GetWindowSizeForCurrentGridSize(hwnd, windowCX, windowCY)) {
+    if (!GetWindowSizeForCurrentGridSize(windowCX, windowCY)) {
         return;
     }
 
@@ -93,28 +81,7 @@ VOID ResizeSuggestionRectForDpiChange(HWND hwnd, PRECT prcSuggestion)
 
 }
 
-VOID HandleDpiChange(HWND hwnd, UINT DPI, RECT* prc)
-{
-    DbgPrintHiPri("Handling a DPI change (DPI: %i)\n", DPI);
-
-    // Update grid with new DPI
-    SetGridDpi(DPI);
-
-    // Now that grid has updated it's size, attempt to keep the
-    // new window rect from changing the grid size
-    RECT rcResize = *prc;
-    ResizeSuggestionRectForDpiChange(hwnd, &rcResize);
-
-    // Adjust window size for DPI change
-    SetWindowPos(hwnd, NULL,
-        rcResize.left,
-        rcResize.top,
-        RECTWIDTH(rcResize),
-        RECTHEIGHT(rcResize),
-        SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
+BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
 {
     BOOL ret = FALSE;
 
@@ -178,11 +145,11 @@ BOOL EnforceWindowPosRestrictions(PRECT prcWindow)
     return ret;
 }
 
-VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
+VOID Window::SizeWindowToGrid(PPOINT pptResizeAround)
 {
     // Calc window size that would perfectly fit the grid
     UINT windowCX, windowCY;
-    if (!GetWindowSizeForCurrentGridSize(hwnd, windowCX, windowCY)) {
+    if (!GetWindowSizeForCurrentGridSize(windowCX, windowCY)) {
         return;
     }
 
@@ -224,8 +191,45 @@ VOID SizeWindowToGrid(HWND hwnd, PPOINT pptResizeAround)
         SWP_SHOWWINDOW);
 }
 
-VOID ApplyWindowRestrictionsForPosChanging(PWINDOWPOS pwp)
+VOID Window::HandleDpiChange(UINT DPI, RECT* prc)
 {
+    bHandlingDpiChange = TRUE;
+
+    DbgPrintHiPri("Handling a DPI change (DPI: %i)\n", DPI);
+
+    // Update grid with new DPI
+    SetGridDpi(DPI);
+
+    // Now that grid has updated it's size, attempt to keep the
+    // new window rect from changing the grid size
+    RECT rcResize = *prc;
+    ResizeSuggestionRectForDpiChange(&rcResize);
+
+    // Adjust window size for DPI change
+    SetWindowPos(hwnd, NULL,
+        rcResize.left,
+        rcResize.top,
+        RECTWIDTH(rcResize),
+        RECTHEIGHT(rcResize),
+        SWP_NOZORDER | SWP_NOACTIVATE);
+
+    bHandlingDpiChange = FALSE;
+}
+
+VOID Window::HandleWindowPosChanged()
+{
+    if (SizeGridToWindow(hwnd) && bHandlingDpiChange) {
+        DbgPrintError("Error: resized grid while handling a DPI change.\n");
+    }
+}
+
+VOID Window::HandleWindowPosChanging(PWINDOWPOS pwp)
+{
+    // Hack Alert! using a private win32k window arrangement bit...
+#define SWP_POSARRANGEDWINDOW 0x00100000 // TODO: get rid of this
+    bTrackSnap = pwp->flags & SWP_POSARRANGEDWINDOW;
+
+
     RECT rcNewWindowRect = { pwp->x, pwp->y, pwp->x + pwp->cx, pwp->y + pwp->cy };
     if (EnforceWindowPosRestrictions(&rcNewWindowRect)) {
         pwp->x = rcNewWindowRect.left;
@@ -240,34 +244,43 @@ VOID ApplyWindowRestrictionsForPosChanging(PWINDOWPOS pwp)
 
 }
 
-INT AccumulateMouseWheelDelta(WPARAM wParam) {
-    static INT _delta = 0;
-    INT delta = GET_WHEEL_DELTA_WPARAM(wParam);
-    _delta += delta;
-    if (_delta <= -120 || _delta >= 120) {
-        BOOL bUp = _delta > 0;
-        _delta -= (bUp ? 120 : -120);
-        return (bUp ? 1 : -1);
+VOID Window::HandleEnterExitMoveSize(BOOL bEnter)
+{
+    if (bEnter) {
+        bTrackMoveSize = TRUE;
+    } else {
+        if (bSnapWindowSizeToGrid && !bTrackSnap) {
+            SizeWindowToGrid(NULL);
+        }
+        bTrackMoveSize = FALSE;
     }
-    return 0;
 }
 
-VOID HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam)
+VOID Window::HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam)
 {
-    INT delta = AccumulateMouseWheelDelta(wParam);
-    if (delta != 0) {
+    mw_delta += GET_WHEEL_DELTA_WPARAM(wParam);
+    if (mw_delta <= -120 || mw_delta >= 120) {
+        BOOL bUp = mw_delta > 0;
+        mw_delta -= (bUp ? 120 : -120);
+        
+        INT scroll = (bUp ? 1 : -1);
         if (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) {
-            AdjustGridSize(delta);
+            AdjustGridSize(scroll);
         } else {
-            AdjustBaseBlockSize(delta);
+            AdjustBaseBlockSize(scroll);
         }
 
         POINT ptCursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-        SizeWindowToGrid(hwnd, &ptCursor);
+        SizeWindowToGrid(&ptCursor);
     }
 }
 
-VOID Draw(HWND hwnd, HDC hdc)
+VOID Window::HandleDoubleClick(POINT pt)
+{
+    SizeWindowToGrid(&pt);
+}
+
+VOID Window::Draw(HDC hdc)
 {
     // Fill background color
     static COLORREF rgbBackgroundColor = RGB(0, 0, 255);
@@ -281,15 +294,19 @@ VOID Draw(HWND hwnd, HDC hdc)
 
 }
 
-VOID InitWindow(HWND hwnd)
+VOID Window::Create(HWND _hwnd)
 {
-    UINT DPI = GetDpiForWindow_l(hwnd);
+    hwnd = _hwnd;
+
+    dpi = GetDpiForWindow_l(hwnd);
     DbgPrintHiPri("Initializing window, DPI: %i (%i%%, %.2fx)\n",
-        DPI, DPIinPercentage(DPI), DPItoFloat(DPI));
+        dpi, DPIinPercentage(dpi), DPItoFloat(dpi));
+
+    EnableNonClientScalingForWindow(hwnd);
 
     InitGrid(hwnd);
 
-    SizeWindowToGrid(hwnd, NULL);
+    SizeWindowToGrid(NULL);
 }
 
 
