@@ -73,7 +73,10 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         break;
 
     case WM_DESTROY:
-        PostQuitMessage(0);
+        WindowMap.erase(hwnd);
+        if (WindowMap.size() == 0) {
+            PostQuitMessage(0);
+        }
         break;
     }
 
@@ -115,7 +118,8 @@ Window::Window(
         WndTitle,
         WndStyle,
         x, y, cx, cy,
-        nullptr, nullptr, hinst, nullptr);
+        nullptr, nullptr, hinst, 
+        this);
 
     if (!hwnd) {
         DbgPrintError("Error: CreateWindowEx Failed.\n");

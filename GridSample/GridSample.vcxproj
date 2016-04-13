@@ -151,7 +151,7 @@
   <ItemGroup>
     <ClCompile Include="dpi.cpp" />
     <ClCompile Include="grid.cpp" />
-    <ClCompile Include="GridSample.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="settings.cpp" />
     <ClCompile Include="stdafx.cpp" />
     <ClCompile Include="window.cpp" />
