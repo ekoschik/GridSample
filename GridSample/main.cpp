@@ -77,6 +77,7 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
         if (WindowMap.size() == 0) {
             PostQuitMessage(0);
         }
+        DbgPrint("Window Exiting...\n");
         break;
     }
 
@@ -147,20 +148,18 @@ BOOL Window::EnsureWindowIsRegistered(HINSTANCE hinst, LPWSTR WndClassName)
 
 int main(int argc, char* argv[])
 {
-    // Read args, and return immediately if help menu was shown
-    if (InitSettingsFromArgs(argc, argv)) {
-        return 1;
-    }
-
     // Load the DPI APIs and set the process DPI awareness
     InitProcessDpiAwareness();
 
     // Create the windows
+
+    DbgPrint("Creating window 1...\n");
     Settings set1 = { TRUE, TRUE, FALSE, FALSE };
     Window wnd1(15, 15, 50, set1);
     
-    //Settings set2 = { TRUE, FALSE, FALSE, TRUE };
-    //Window wnd2(10, 10, 15, set2);
+    DbgPrint("Creating window 2...\n");
+    Settings set2 = { TRUE, FALSE, FALSE, TRUE };
+    Window wnd2(6, 6, 45, set2);
 
     // Message pump
     MSG msg;
@@ -170,6 +169,7 @@ int main(int argc, char* argv[])
         DispatchMessage(&msg);
     }
 
+    DbgPrint("Thread Exiting...\n");
     return (int)msg.wParam;
 }
 

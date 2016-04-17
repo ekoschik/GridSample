@@ -191,8 +191,7 @@ VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
     // Update grid with new DPI
     grid.SetDpi(DPI);
 
-    // Now that grid has updated it's size, attempt to keep the
-    // new window rect from changing the grid size
+    // Just take the suggestion rect
     RECT rcResize = *prc;
     //ResizeSuggestionRectForDpiChange(&rcResize);
 
@@ -217,8 +216,7 @@ VOID Window::HandleWindowPosChanged()
 VOID Window::HandleWindowPosChanging(PWINDOWPOS pwp)
 {
     // Hack Alert! using a private win32k window arrangement bit...
-#define SWP_POSARRANGEDWINDOW 0x00100000 // TODO: get rid of this
-    bTrackSnap = pwp->flags & SWP_POSARRANGEDWINDOW;
+    bTrackSnap = pwp->flags & 0x00100000; // TODO: get rid of this nonsense
 
     RECT rcNewWindowRect = { pwp->x, pwp->y, pwp->x + pwp->cx, pwp->y + pwp->cy };
     if (EnforceWindowPosRestrictions(&rcNewWindowRect)) {
@@ -243,16 +241,13 @@ VOID Window::HandleEnterExitMoveSize(BOOL bEnter)
 
 VOID Window::HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam)
 {
-    mw_delta += GET_WHEEL_DELTA_WPARAM(wParam);
-    if (mw_delta <= -120 || mw_delta >= 120) {
-        BOOL bUp = mw_delta > 0;
-        mw_delta -= (bUp ? 120 : -120);
-        
-        INT scroll = (bUp ? 1 : -1);
+    INT wheel_delta;
+    if ((wheel_delta = mw_delta.inc(GET_WHEEL_DELTA_WPARAM(wParam))) != 0) {
+
         if (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) {
-            grid.AdjustGridSize(scroll);
+            grid.AdjustGridSize(wheel_delta);
         } else {
-            grid.AdjustBlockSize(scroll);
+            grid.AdjustBlockSize(wheel_delta);
         }
 
         POINT ptCursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
@@ -276,7 +271,6 @@ VOID Window::Draw(HDC hdc)
 
     // Draw Grid
     grid.Draw(hdc);
-
 }
 
 VOID Window::Create(HWND _hwnd)

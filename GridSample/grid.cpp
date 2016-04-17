@@ -99,6 +99,4 @@ VOID Grid::Init(INT cx, INT cy, INT blocksize)
 
     hbrGrid1 = CreateSolidBrush(rgbGrid1);
     hbrGrid2 = CreateSolidBrush(rgbGrid2);
-
-    //SetDpi(96);
 }

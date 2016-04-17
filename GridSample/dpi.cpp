@@ -57,7 +57,7 @@ BOOL InitProcessDpiAwareness()
         DbgPrint("%sfound EnableChildWindowDpiMessage.\n", INDENT);
     }
 
-    // Determine which DPI awareness to use
+    // Set system aware if AdjustWindowRectExForDpi is not available
     BOOL bSetSystemAware = (pfnAdjustWindowRectExForDpi == NULL);
 
     // Call SetProcessDpiAwareness

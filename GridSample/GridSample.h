@@ -4,9 +4,6 @@
 #include <shellscalingapi.h>
 #include <Windowsx.h>
 
-
-BOOL InitSettingsFromArgs(int argc, char* argv[]);
-
 struct Settings {
     BOOL bResize;
     BOOL bSnapWindowToGrid;
@@ -46,6 +43,20 @@ private:
     COLORREF rgbGrid2 = RGB(204, 153, 0); // dark yellow
 };
 
+class MWdelta {
+    INT _delta;
+public:
+    MWdelta() { _delta = 0; }
+    INT inc(INT delta) {
+        _delta += delta;
+        if (_delta <= -120 || _delta >= 120) {
+            BOOL bUp = _delta > 0;
+            _delta -= (bUp ? 120 : -120);
+            return (bUp ? 1 : -1);
+        }
+        return 0;
+    }
+};
 
 class Window {
 public:
@@ -83,7 +94,7 @@ private:
     BOOL bTrackSnap = FALSE;
     BOOL bTrackMoveSize = FALSE;
 
-    INT mw_delta; // for WM_MOUSEWHEEL
+    MWdelta mw_delta; // for WM_MOUSEWHEEL
 };
 
 
@@ -144,11 +155,12 @@ __inline void ResetConsoleColor(WORD gPrevConsoleTextAttribs) {
 #define INDENT "  ---> "
 
 #define DbgPrintImpl(attr, ...) { \
-                                  WORD gPrevConsoleTextAttribs; \
-                                  SetConsoleColor(attr, gPrevConsoleTextAttribs); \
                                   printf (__VA_ARGS__); \
-                                  ResetConsoleColor(gPrevConsoleTextAttribs); \
                                 }
+                                //WORD gPrevConsoleTextAttribs; \
+                                //SetConsoleColor(attr, gPrevConsoleTextAttribs); \
+                                //ResetConsoleColor(gPrevConsoleTextAttribs); \
+                                //}
 
 #define DbgPrintError(...)  DbgPrintImpl(BACKGROUND_RED/*| FOREGROUND_RED */| BACKGROUND_INTENSITY, __VA_ARGS__)
 
