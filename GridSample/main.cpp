@@ -83,16 +83,10 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
     return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-Window::Window(
-    BOOL _bResize,
-    BOOL _bSnapWindowToGrid,
-    BOOL _bRestrictToMonitorSize,
-    BOOL _bAlwaysEntirelyOnMonitor)
+Window::Window(INT Gridcx, INT Gridcy, INT blocksize, Settings _settings)
 {
-    bResize = _bResize;
-    bSnapWindowToGrid = _bSnapWindowToGrid;
-    bRestrictToMonitorSize = _bRestrictToMonitorSize;
-    bAlwaysEntirelyOnMonitor = _bAlwaysEntirelyOnMonitor;
+    settings = _settings;
+    grid.Init(Gridcx, Gridcy, blocksize);
 
     LPWSTR WndClassName = _T("WndClass");
     LPWSTR WndTitle = _T("Grid Sample");
@@ -104,7 +98,7 @@ Window::Window(
     }
 
     DWORD WndStyleEx = 0;
-    DWORD WndStyle = _bResize ? WS_OVERLAPPEDWINDOW :
+    DWORD WndStyle = settings.bResize ? WS_OVERLAPPEDWINDOW :
         WS_OVERLAPPEDWINDOW ^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
 
     int x = CW_USEDEFAULT,
@@ -162,8 +156,11 @@ int main(int argc, char* argv[])
     InitProcessDpiAwareness();
 
     // Create the windows
-    Window wnd(TRUE,TRUE,FALSE,FALSE);
-    Window wnd1(TRUE, FALSE, FALSE, TRUE);
+    Settings set1 = { TRUE, TRUE, FALSE, FALSE };
+    Window wnd1(15, 15, 50, set1);
+    
+    //Settings set2 = { TRUE, FALSE, FALSE, TRUE };
+    //Window wnd2(10, 10, 15, set2);
 
     // Message pump
     MSG msg;

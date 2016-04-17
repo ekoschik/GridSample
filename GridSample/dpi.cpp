@@ -133,7 +133,22 @@ BOOL AdjustWindowRectExForDpi_l(LPRECT lpRect, DWORD dwStyle, DWORD dwExStyle, B
     return ret;
 }
 
-UINT GetDpiForWindow_l(HWND hwnd)
+BOOL GetWindowSizeForClientSize(HWND hwnd, UINT &cx, UINT &cy)
+{
+    RECT rc = { 0, 0, (LONG)cx, (LONG)cy };
+    if (!AdjustWindowRectExForDpi_l(&rc,
+        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
+        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
+        FALSE, GetDpiForWindow(hwnd))) {
+        return FALSE;
+    }
+
+    cx = RECTWIDTH(rc);
+    cy = RECTHEIGHT(rc);
+    return TRUE;
+}
+
+UINT GetDpiForWindow(HWND hwnd)
 {
     // The DPI of a System Aware window is always the system DPI,
     // and the system DPI cannot change

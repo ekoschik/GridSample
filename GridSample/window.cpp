@@ -2,26 +2,16 @@
 #include "stdafx.h"
 #include "GridSample.h"
 
-BOOL Window::GetWindowSizeForCurrentGridSize(UINT &cx, UINT &cy)
+BOOL Window::GetWindowSizeForCurrentGridSize(UINT &_cx, UINT &_cy)
 {
-    // Determine ideal client size
-    UINT gridCX, gridCY;
-    GetGridSize(gridCX, gridCY);
-
-    // Use AdjustWindowRectExForDpi to get new window size
-    RECT rc = { 0, 0, (LONG)gridCX, (LONG)gridCY };
-    if (!AdjustWindowRectExForDpi_l(&rc,
-        (DWORD)GetWindowLong(hwnd, GWL_STYLE),
-        (DWORD)GetWindowLong(hwnd, GWL_EXSTYLE),
-        FALSE, GetDpiForWindow_l(hwnd))) {
-        DbgPrintError("AdjustWindowRectExForDpi Failed.\n");
-        return FALSE;
+    UINT cx, cy;
+    grid.GetSize(cx, cy);
+    if (GetWindowSizeForClientSize(hwnd, cx, cy)) {
+        _cx = cx;
+        _cy = cy;
+        return TRUE;
     }
-
-    // Get new window size from AdjustWindowRectExForDpi output
-    cx = RECTWIDTH(rc);
-    cy = RECTHEIGHT(rc);
-    return TRUE;
+    return FALSE;
 }
 
 VOID Window::ResizeSuggestionRectForDpiChange(PRECT prcSuggestion)
@@ -101,7 +91,7 @@ BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
     rcWork.bottom += nudge_factor;
 
     // Restrict window size to work area size
-    if (bRestrictToMonitorSize) {
+    if (settings.bRestrictToMonitorSize) {
 
         // TODO: recognize which side should be modified (aka, if resizing, which side is being resized?)
 
@@ -116,7 +106,7 @@ BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
     }
 
     // Ensure window is entirely in work area (but keep the current size)
-    if (bAlwaysEntirelyOnMonitor) {
+    if (settings.bAlwaysEntirelyOnMonitor) {
         int cx = PRECTWIDTH(prcWindow);
         int cy = PRECTHEIGHT(prcWindow);
 
@@ -191,20 +181,20 @@ VOID Window::SizeWindowToGrid(PPOINT pptResizeAround)
         SWP_SHOWWINDOW);
 }
 
-VOID Window::HandleDpiChange(UINT DPI, RECT* prc)
+VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
 {
     bHandlingDpiChange = TRUE;
 
-    DbgPrint("Handling a DPI change (DPI: %i)\n", DPI);
-    dpi = DPI;
+    DbgPrint("Handling a DPI change (new DPI: %i, old DPI: %i)\n", _DPI, DPI);
+    DPI = DPI;
 
     // Update grid with new DPI
-    SetGridDpi(DPI);
+    grid.SetDpi(DPI);
 
     // Now that grid has updated it's size, attempt to keep the
     // new window rect from changing the grid size
     RECT rcResize = *prc;
-    ResizeSuggestionRectForDpiChange(&rcResize);
+    //ResizeSuggestionRectForDpiChange(&rcResize);
 
     // Adjust window size for DPI change
     SetWindowPos(hwnd, NULL,
@@ -219,7 +209,7 @@ VOID Window::HandleDpiChange(UINT DPI, RECT* prc)
 
 VOID Window::HandleWindowPosChanged()
 {
-    if (SizeGridToWindow(hwnd) && bHandlingDpiChange) {
+    if (grid.SizeToWindow(hwnd) && bHandlingDpiChange) {
         DbgPrintError("Error: resized grid while handling a DPI change.\n");
     }
 }
@@ -230,7 +220,6 @@ VOID Window::HandleWindowPosChanging(PWINDOWPOS pwp)
 #define SWP_POSARRANGEDWINDOW 0x00100000 // TODO: get rid of this
     bTrackSnap = pwp->flags & SWP_POSARRANGEDWINDOW;
 
-
     RECT rcNewWindowRect = { pwp->x, pwp->y, pwp->x + pwp->cx, pwp->y + pwp->cy };
     if (EnforceWindowPosRestrictions(&rcNewWindowRect)) {
         pwp->x = rcNewWindowRect.left;
@@ -238,11 +227,6 @@ VOID Window::HandleWindowPosChanging(PWINDOWPOS pwp)
         pwp->cx = RECTWIDTH(rcNewWindowRect);
         pwp->cy = RECTHEIGHT(rcNewWindowRect);
     }
-
-    // TODO: do something about how the cursor drifts when
-    // keeping the window on the monitor while being dragged??
-    // (when keeping window on monitor)
-
 }
 
 VOID Window::HandleEnterExitMoveSize(BOOL bEnter)
@@ -250,7 +234,7 @@ VOID Window::HandleEnterExitMoveSize(BOOL bEnter)
     if (bEnter) {
         bTrackMoveSize = TRUE;
     } else {
-        if (bSnapWindowToGrid && !bTrackSnap) {
+        if (settings.bSnapWindowToGrid && !bTrackSnap) {
             SizeWindowToGrid(NULL);
         }
         bTrackMoveSize = FALSE;
@@ -266,9 +250,9 @@ VOID Window::HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam)
         
         INT scroll = (bUp ? 1 : -1);
         if (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) {
-            AdjustGridSize(scroll);
+            grid.AdjustGridSize(scroll);
         } else {
-            AdjustBaseBlockSize(scroll);
+            grid.AdjustBlockSize(scroll);
         }
 
         POINT ptCursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
@@ -291,7 +275,7 @@ VOID Window::Draw(HDC hdc)
     FillRect(hdc, &rcClient, hbr);
 
     // Draw Grid
-    DrawGrid(hwnd, hdc);
+    grid.Draw(hdc);
 
 }
 
@@ -299,15 +283,14 @@ VOID Window::Create(HWND _hwnd)
 {
     hwnd = _hwnd;
 
-    dpi = GetDpiForWindow_l(hwnd);
+    DPI = GetDpiForWindow(hwnd);
     DbgPrint("Initializing window, DPI: %i (%i%%, %.2fx)\n",
-        dpi, DPIinPercentage(dpi), DPItoFloat(dpi));
+        DPI, DPIinPercentage(DPI), DPItoFloat(DPI));
+
+    grid.SetDpi(DPI);
+    SizeWindowToGrid(NULL);
 
     EnableNonClientScalingForWindow(hwnd);
-
-    InitGrid(hwnd);
-
-    SizeWindowToGrid(NULL);
 }
 
 

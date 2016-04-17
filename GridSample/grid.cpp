@@ -3,52 +3,36 @@
 #include "GridSample.h"
 
 
-BOOL bInit = FALSE;
-
-// Block size
-int blockSizeModifier = 7;
-int baseBlockSize = 40;
-int adjustedBlockSize = baseBlockSize;
-
-// Grid size (in blocks)
-int grid_cx = 10, grid_cy = 10;
-
-// Drawing resources
-HBRUSH hbrGrid1, hbrGrid2;
-COLORREF rgbGrid1 = RGB(0, 51, 204); // blue
-COLORREF rgbGrid2 = RGB(204, 153, 0); // dark yellow
-
-int GetBlockSizeForDpi(UINT dpi)
+int Grid::GetBlockSizeForDpi(UINT dpi)
 {
     int linearScaled = ScaleToPhys(dpi, baseBlockSize);
     return linearScaled - (linearScaled % blockSizeModifier);
 }
 
-int gCurrentDpi = 96;
-VOID SetGridDpi(UINT DPI)
+VOID Grid::SetDpi(UINT _DPI)
 {
-    gCurrentDpi = DPI;
+    DPI = _DPI;
     adjustedBlockSize = GetBlockSizeForDpi(DPI);
     DbgPrint("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
 }
 
-VOID GetGridSize(UINT &cx, UINT &cy)
+VOID Grid::GetSize(UINT &cx, UINT &cy)
 {
     cx = adjustedBlockSize * grid_cx;
     cy = adjustedBlockSize * grid_cy;
 }
 
-VOID AdjustBaseBlockSize(INT delta)
+VOID Grid::AdjustBlockSize(INT delta)
 {
     // Adjust base block size, enforcing a reasonable minimum
     const static int minBlockSize = blockSizeModifier * 2;
     baseBlockSize = EnforceMinimumValue(baseBlockSize + (blockSizeModifier * delta), minBlockSize);
-    adjustedBlockSize = GetBlockSizeForDpi(gCurrentDpi);
+    adjustedBlockSize = GetBlockSizeForDpi(DPI);
 
     DbgPrint("Set new logical block size: %i (adjusted: %i)\n", baseBlockSize, adjustedBlockSize);
 }
 
-VOID AdjustGridSize(INT delta)
+VOID Grid::AdjustGridSize(INT delta)
 {
     int grid_cx_prev = grid_cx,
         grid_cy_prev = grid_cy;
@@ -62,13 +46,8 @@ VOID AdjustGridSize(INT delta)
         grid_cx, grid_cy, grid_cx_prev, grid_cy_prev);
 }
 
-BOOL SizeGridToWindow(HWND hwnd)
+BOOL Grid::SizeToWindow(HWND hwnd)
 {
-    // TODO: make this cleaner.  essentially, a WINDOWPOSCHANGED is coming
-    // in during initialization, causing SizeGridToWindow to happen before
-    // SizeWindowToGrid
-    if (!bInit) return FALSE;
-
     RECT rcClient;
     GetClientRect(hwnd, &rcClient);
 
@@ -87,7 +66,7 @@ BOOL SizeGridToWindow(HWND hwnd)
     return FALSE;
 }
 
-VOID DrawGrid(HWND hwnd, HDC hdc)
+VOID Grid::Draw(HDC hdc)
 {
     BOOL bColor1 = TRUE;
     RECT rcCur = { 0, 0, adjustedBlockSize, adjustedBlockSize };
@@ -112,11 +91,14 @@ VOID DrawGrid(HWND hwnd, HDC hdc)
     }
 }
 
-VOID InitGrid(HWND hwnd)
+VOID Grid::Init(INT cx, INT cy, INT blocksize)
 {
-    bInit = TRUE;
+    baseBlockSize = blocksize;
+    grid_cx = cx;
+    grid_cy = cy;
+
     hbrGrid1 = CreateSolidBrush(rgbGrid1);
     hbrGrid2 = CreateSolidBrush(rgbGrid2);
 
-    SetGridDpi(GetDpiForWindow_l(hwnd));
+    //SetDpi(96);
 }
