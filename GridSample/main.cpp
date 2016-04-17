@@ -5,8 +5,40 @@
 
 using namespace std;
 
-map<HWND, Window*> WindowMap;
+VOID Run()
+{
+    DbgPrint("Creating window 1...\n");
+    Settings set1 = { TRUE,  //bResize;
+                      TRUE,  //bSnapWindowToGrid;
+                      FALSE, //bRestrictToMonitorSize;
+                      FALSE  //bAlwaysEntirelyOnMonitor
+                    };
+    Window wnd1(15, // cx
+                15, // cy
+                50, // blocksize 
+                set1);
 
+    //DbgPrint("Creating window 2...\n");
+    //Settings set2 = { TRUE,  //bResize;
+    //                  FALSE, //bSnapWindowToGrid;
+    //                  TRUE,  //bRestrictToMonitorSize;
+    //                  FALSE  //bAlwaysEntirelyOnMonitor
+    //                };
+    //Window wnd2(6, // cx
+    //            6, // cy
+    //            45, // blocksize
+    //            set2);
+
+    // Pump Messages!
+    MSG msg;
+    DbgPrint("Entering Message Loop.\n\n");
+    while (GetMessage(&msg, nullptr, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
+map<HWND, Window*> WindowMap;
 LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     map<HWND, Window*>::iterator it;
@@ -148,28 +180,11 @@ BOOL Window::EnsureWindowIsRegistered(HINSTANCE hinst, LPWSTR WndClassName)
 
 int main(int argc, char* argv[])
 {
-    // Load the DPI APIs and set the process DPI awareness
     InitProcessDpiAwareness();
 
-    // Create the windows
-
-    DbgPrint("Creating window 1...\n");
-    Settings set1 = { TRUE, TRUE, FALSE, FALSE };
-    Window wnd1(15, 15, 50, set1);
-    
-    DbgPrint("Creating window 2...\n");
-    Settings set2 = { TRUE, FALSE, FALSE, TRUE };
-    Window wnd2(6, 6, 45, set2);
-
-    // Message pump
-    MSG msg;
-    DbgPrint("Entering Message Loop.\n\n");
-    while (GetMessage(&msg, nullptr, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+    Run();
 
     DbgPrint("Thread Exiting...\n");
-    return (int)msg.wParam;
+    return 0;
 }
 

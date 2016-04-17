@@ -11,7 +11,6 @@ struct Settings {
     BOOL bAlwaysEntirelyOnMonitor;
 };
 
-
 class Grid {
 public:
     VOID Init(INT cx, INT cy, INT blocksize);
@@ -94,31 +93,23 @@ private:
     BOOL bTrackSnap = FALSE;
     BOOL bTrackMoveSize = FALSE;
 
-    MWdelta mw_delta; // for WM_MOUSEWHEEL
+    MWdelta mw_delta;
 };
 
-
-//
-// DPI related functions
-//
-BOOL InitProcessDpiAwareness();
-BOOL EnableNonClientScalingForWindow(HWND hwnd);
-BOOL GetWindowSizeForClientSize(HWND hwnd, UINT &cx, UINT &cy);
-UINT GetDpiForWindow(HWND hwnd);
 extern PROCESS_DPI_AWARENESS gpda;
-
 #define IsProcessPerMonitorDpiAware() (gpda == PROCESS_PER_MONITOR_DPI_AWARE)
 #define IsProcessSystemDpiAware()     (gpda == PROCESS_SYSTEM_DPI_AWARE)
+
+BOOL InitProcessDpiAwareness();
+UINT GetDpiForWindow(HWND hwnd);
+BOOL EnableNonClientScalingForWindow(HWND hwnd);
+BOOL GetWindowSizeForClientSize(HWND hwnd, UINT &cx, UINT &cy);
 
 #define ScaleToPhys(DPI, val)   MulDiv(val, DPI, 96)
 #define ScaleToLog(DPI, val)    MulDiv(val, 96, DPI)
 #define DPIinPercentage(DPI)    ScaleToPhys(DPI, 100)
 #define DPItoFloat(DPI)         ((float)DPI / 96)
 
-
-//
-// Other helpers
-//
 #define RECTWIDTH(rc) (rc.right - rc.left)
 #define RECTHEIGHT(rc) (rc.bottom - rc.top)
 #define PRECTWIDTH(prc) (prc->right - prc->left)
@@ -135,9 +126,8 @@ __inline VOID ResizeRectAroundPoint(PRECT prc, UINT cx, UINT cy, POINT pt) {
     prc->bottom = prc->top + cy;
 }
 
-
 //
-// Fancy console printing with macros
+// Dbg/ Error printing macros
 //
 
 __inline void SetConsoleColor(WORD Color, WORD &gPrevConsoleTextAttribs) {
@@ -166,11 +156,6 @@ __inline void ResetConsoleColor(WORD gPrevConsoleTextAttribs) {
 
 #define FOREGROUND_WHITE    (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN)
 #define DbgPrint(...)       DbgPrintImpl(FOREGROUND_WHITE | FOREGROUND_INTENSITY, __VA_ARGS__)
-
-
-#define RegTextApptribs     
-
-// other colors
 
 #define FOREGROUND_YELLOW       	(FOREGROUND_RED | FOREGROUND_GREEN)
 #define FOREGROUND_CYAN		        (FOREGROUND_BLUE | FOREGROUND_GREEN)
