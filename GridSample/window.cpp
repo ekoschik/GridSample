@@ -28,21 +28,23 @@ BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
     RECT rcWork = mi.rcWork;
 
     // Super Hack (invisible borders) TODO: what's the magic number?
-    int nudge_factor = 9;
+    int nudge_factor = 12;
+    rcWork.top -= nudge_factor;
     rcWork.left -= nudge_factor;
     rcWork.right += nudge_factor;
     rcWork.bottom += nudge_factor;
 
     // Restrict window size to work area size
     if (settings.bRestrictToMonitorSize) {
-
-        // TODO: recognize which side should be modified (aka, if resizing, which side is being resized?)
-
         if (PRECTWIDTH(prcWindow) > RECTWIDTH(rcWork)) {
+            DbgPrint("Restricting window width to monitor work area width.\n");
+            DbgPrint("%swas %i, setting to %i.\n", INDENT, PRECTWIDTH(prcWindow), RECTWIDTH(rcWork));
             prcWindow->right = prcWindow->left + RECTWIDTH(rcWork);
             ret = TRUE;
         }
         if (PRECTHEIGHT(prcWindow) > RECTHEIGHT(rcWork)) {
+            DbgPrint("Restricting window height to monitor work area height.\n");
+            DbgPrint("%swas %i, setting to %i.\n", INDENT, PRECTHEIGHT(prcWindow), RECTHEIGHT(rcWork));
             prcWindow->bottom = prcWindow->top + RECTHEIGHT(rcWork);
             ret = TRUE;
         }
@@ -139,12 +141,8 @@ VOID Window::ResizeSuggestionRectForDpiChange(PRECT prcSuggestion)
         return;
     }
 
-    // Start with the current window rect
     RECT rcWindow;
     GetWindowRect(hwnd, &rcWindow);
-
-    // Forcefully ensure that resizing the window rect for a DPI
-    // does not change the monitor the window is on
     HMONITOR hmonStart = MonitorFromRect(&rcWindow, MONITOR_DEFAULTTONEAREST);
     RECT rcOrig = *prcSuggestion;
 
@@ -166,11 +164,9 @@ VOID Window::ResizeSuggestionRectForDpiChange(PRECT prcSuggestion)
         prcSuggestion->bottom = prcSuggestion->top + windowCY;
     }
 
-    // Are we about to wobble?
-    HMONITOR hmonFinish = MonitorFromRect(prcSuggestion, MONITOR_DEFAULTTONEAREST);
-
-    if (hmonStart != hmonFinish) {
-        *prcSuggestion = rcOrig; // bail!
+    // Bail (use the original rect) if the new one is on a different monitor
+    if (hmonStart != MonitorFromRect(prcSuggestion, MONITOR_DEFAULTTONEAREST)) {
+        *prcSuggestion = rcOrig;
         DbgPrintError("WOBBLE ALLERT!!!\n");
 
         // TODO: do something better here... can we attempt to move
@@ -186,7 +182,7 @@ VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
     bHandlingDpiChange = TRUE;
 
     DbgPrint("Handling a DPI change (new DPI: %i, old DPI: %i)\n", _DPI, DPI);
-    DPI = DPI;
+    DPI = _DPI;
 
     // Update grid with new DPI
     grid.SetDpi(DPI);
@@ -194,7 +190,7 @@ VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
     // Start with the suggestion rect
     RECT rcResize = *prc;
     
-    //ResizeSuggestionRectForDpiChange(&rcResize);
+    ResizeSuggestionRectForDpiChange(&rcResize);
 
     // Adjust window size for DPI change
     SetWindowPos(hwnd, NULL,
@@ -220,7 +216,11 @@ VOID Window::HandleWindowPosChanging(PWINDOWPOS pwp)
     bTrackSnap = pwp->flags & 0x00100000; // TODO: get rid of this nonsense
 
     RECT rcNewWindowRect = { pwp->x, pwp->y, pwp->x + pwp->cx, pwp->y + pwp->cy };
-    if (EnforceWindowPosRestrictions(&rcNewWindowRect)) {
+    if (!IsZoomed(hwnd) && // (if not maximized)
+        EnforceWindowPosRestrictions(&rcNewWindowRect)) {
+
+        pwp->flags |= SWP_NOMOVE;
+
         pwp->x = rcNewWindowRect.left;
         pwp->y = rcNewWindowRect.top;
         pwp->cx = RECTWIDTH(rcNewWindowRect);
