@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <shellscalingapi.h>
 #include <Windowsx.h>
+#include <map>
 
 struct Settings {
     BOOL bResize;
