@@ -128,14 +128,6 @@ VOID Window::SizeWindowToGrid(PPOINT pptResizeAround)
 
 VOID Window::ResizeSuggestionRectForDpiChange(PRECT prcSuggestion)
 {
-    // When handling a DPI change in the middle of being snapped, we
-    // should just let the snap do it's thing (so that the window is
-    // always in the position that the shell/user decided to give us).
-    if (bTrackSnap) {
-        return;
-    }
-
-    // Determine the ideal window size we want
     UINT windowCX, windowCY;
     if (!GetWindowSizeForCurrentGridSize(windowCX, windowCY)) {
         return;
@@ -152,19 +144,13 @@ VOID Window::ResizeSuggestionRectForDpiChange(PRECT prcSuggestion)
     GetCursorPos(&pt);
 
     if (PtInRect(&rcWindow, pt)) {
-
         ResizeRectAroundPoint(prcSuggestion, windowCX, windowCY, pt);
-
-        // TODO: do something about how cursor is still drifting
-        // (maybe re-check for the cursor pos and shift if necessary?)
-
-    }
-    else {
+    } else {
         prcSuggestion->right = prcSuggestion->left + windowCX;
         prcSuggestion->bottom = prcSuggestion->top + windowCY;
     }
 
-    // Bail (use the original rect) if the new one is on a different monitor
+    // Do not change the suggestion rect if the new rect is on a different monitor
     if (hmonStart != MonitorFromRect(prcSuggestion, MONITOR_DEFAULTTONEAREST)) {
         *prcSuggestion = rcOrig;
         DbgPrintError("WOBBLE ALLERT!!!\n");
@@ -190,7 +176,9 @@ VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
     // Start with the suggestion rect
     RECT rcResize = *prc;
     
-    ResizeSuggestionRectForDpiChange(&rcResize);
+    if(!bTrackSnap && !IsZoomed(hwnd)) {
+        ResizeSuggestionRectForDpiChange(&rcResize);
+    }
 
     // Adjust window size for DPI change
     SetWindowPos(hwnd, NULL,

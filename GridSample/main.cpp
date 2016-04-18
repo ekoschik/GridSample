@@ -12,8 +12,8 @@ int main(int argc, char* argv[])
                 50, // blocksize 
                 {
                     TRUE,  //Resize;
-                    FALSE,  //Snap Window To Grid;
-                    TRUE, //Restrict To Monitor Size;
+                    FALSE, //Snap Window To Grid;
+                    TRUE,  //Restrict To Monitor Size;
                     FALSE  //Always Entirely On Monitor
                 });
 

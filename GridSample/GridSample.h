@@ -18,14 +18,13 @@ public:
     VOID SetDpi(UINT DPI);
 
     VOID GetSize(UINT &cx, UINT &cy);
+    BOOL SizeToWindow(HWND hwnd);
+    VOID Draw(HDC hdc);
 
     // Adjust the grid for scroll/ ctrl+scroll
     VOID AdjustBlockSize(INT delta);
     VOID AdjustGridSize(INT delta);
 
-    BOOL SizeToWindow(HWND hwnd);
-
-    VOID Draw(HDC hdc);
 
 private:
     UINT DPI;
