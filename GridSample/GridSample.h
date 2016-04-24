@@ -5,13 +5,6 @@
 #include <Windowsx.h>
 #include <map>
 
-struct Settings {
-    BOOL bResize;
-    BOOL bSnapWindowToGrid;
-    BOOL bRestrictToMonitorSize;
-    BOOL bAlwaysEntirelyOnMonitor;
-};
-
 class Grid {
 public:
     VOID Init(INT cx, INT cy, INT blocksize);
@@ -59,7 +52,16 @@ public:
 
 class Window {
 public:
-    Window(INT cx, INT cy, INT blocksize, Settings settings);
+    // Constructors
+    Window();
+    Window(INT cx, INT cy, INT blocksize);
+    Window(INT cx,
+           INT cy,
+           INT blocksize,
+           BOOL bResize,
+           BOOL bSnapWindowToGrid,
+           BOOL bRestrictToMonitorSize,
+           BOOL bAlwaysEntirelyOnMonitor);
 
     // Handling window messages
     VOID Draw(HDC hdc);
@@ -78,22 +80,64 @@ public:
     
 private:
 
-    VOID Create(HWND _hwnd);
-    static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-    static BOOL EnsureWindowIsRegistered(HINSTANCE,LPWSTR);
-
     HWND hwnd;
     UINT DPI;
 
-    Grid grid;
+    // The window class only needs to be registered one time
+    static BOOL EnsureWindowIsRegistered(HINSTANCE, LPWSTR);
 
+    // Private Initializers, and WM_CREATE handler
+    VOID Init(INT cx, INT cy, INT blocksize,
+        BOOL bResize,
+        BOOL bSnapWindowToGrid,
+        BOOL bRestrictToMonitorSize,
+        BOOL bAlwaysEntirelyOnMonitor);
+    VOID Window::Init(INT cx, INT cy, INT blocksize);
+    VOID Create(HWND _hwnd);
+
+    // Per Window Settings
+    struct Settings {
+        BOOL bResize;
+        BOOL bSnapWindowToGrid;
+        BOOL bRestrictToMonitorSize;
+        BOOL bAlwaysEntirelyOnMonitor;
+    };
     Settings settings;
 
-    BOOL bHandlingDpiChange = FALSE;
-    BOOL bTrackSnap = FALSE;
-    BOOL bTrackMoveSize = FALSE;
+    // Each window has it's own Grid
+    Grid grid;
 
+    // Each window tracks if it's in the process of handling
+    // WM_DPICHANGED, in order to error if a DPI change causes 
+    // the grid to be resized.
+    BOOL bHandlingDpiChange = FALSE;
+
+    // In order to behave correctly while the window is
+    // snapped to corners/ sides of monitors, keep track
+    // of whether the window is 'snapped'.  TODO: SuperHacky
+    BOOL bTrackSnap = FALSE;
+    BOOL IsSnapped();
+
+    // Delta accumulater for WM_MOUSEWHEEL
     MWdelta mw_delta;
+
+    // Defaults
+    const Settings DefSettings = {
+        TRUE,  //Resize;
+        FALSE, //Snap Window To Grid;
+        TRUE,  //Restrict To Monitor Size;
+        FALSE  //Always Entirely On Monitor
+    };
+
+    const INT DefGridCX = 15,
+        DefGridCY = 15,
+        DefGridBlockSize = 50;
+
+    // Syntax Glue to allow a single WndProc to be used for several windows at a time
+    static std::map<HWND, Window*> WindowMap;
+    static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+    static Window* LookupWindow(HWND hwnd);
+
 };
 
 extern PROCESS_DPI_AWARENESS gpda;
@@ -124,6 +168,33 @@ __inline VOID ResizeRectAroundPoint(PRECT prc, UINT cx, UINT cy, POINT pt) {
     prc->top = pt.y - MulDiv(pt.y - prc->top, cy, PRECTHEIGHT(prc));
     prc->right = prc->left + cx;
     prc->bottom = prc->top + cy;
+}
+
+__inline BOOL KeepRectInsideBiggerRect(PRECT rcSmall, const PRECT rcBig) {
+    int cx = PRECTWIDTH(rcSmall);
+    int cy = PRECTHEIGHT(rcSmall);
+    BOOL ret = FALSE;
+    if (rcSmall->left < rcBig->left) {
+        rcSmall->left = rcBig->left;
+        rcSmall->right = rcSmall->left + cx;
+        ret = TRUE;
+    }
+    if (rcSmall->top < rcBig->top) {
+        rcSmall->top = rcBig->top;
+        rcSmall->bottom = rcSmall->top + cy;
+        ret = TRUE;
+    }
+    if (rcSmall->right > rcBig->right) {
+        rcSmall->right = rcBig->right;
+        rcSmall->left = rcSmall->right - cx;
+        ret = TRUE;
+    }
+    if (rcSmall->bottom > rcBig->bottom) {
+        rcSmall->bottom = rcBig->bottom;
+        rcSmall->top = rcSmall->bottom - cy;
+        ret = TRUE;
+    }
+    return ret;
 }
 
 //

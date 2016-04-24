@@ -2,6 +2,17 @@
 #include "stdafx.h"
 #include "GridSample.h"
 
+BOOL Window::IsSnapped()
+{
+    // Windows sends a private flag in WINDOWPOSCHANGING, which is
+    // set when the window is getting snapped to a monitor side.
+    // Without knowing whether or not the window is in this state,
+    // some window size restrictions will cause the window to not
+    // behave correctly when being snapped, and so care is taken to
+    // skip enforcing the size restrictions when in this state.
+    return bTrackSnap || IsZoomed(hwnd);
+}
+
 BOOL Window::GetWindowSizeForCurrentGridSize(UINT &_cx, UINT &_cy)
 {
     UINT cx, cy;
@@ -28,7 +39,7 @@ BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
     RECT rcWork = mi.rcWork;
 
     // Super Hack (invisible borders) TODO: what's the magic number?
-    int nudge_factor = 12;
+    int nudge_factor = 12; // I think I need to calc this using 'unadjustwindowrectfordpi...'
     rcWork.top -= nudge_factor;
     rcWork.left -= nudge_factor;
     rcWork.right += nudge_factor;
@@ -37,44 +48,18 @@ BOOL Window::EnforceWindowPosRestrictions(PRECT prcWindow)
     // Restrict window size to work area size
     if (settings.bRestrictToMonitorSize) {
         if (PRECTWIDTH(prcWindow) > RECTWIDTH(rcWork)) {
-            DbgPrint("Restricting window width to monitor work area width.\n");
-            DbgPrint("%swas %i, setting to %i.\n", INDENT, PRECTWIDTH(prcWindow), RECTWIDTH(rcWork));
             prcWindow->right = prcWindow->left + RECTWIDTH(rcWork);
             ret = TRUE;
         }
         if (PRECTHEIGHT(prcWindow) > RECTHEIGHT(rcWork)) {
-            DbgPrint("Restricting window height to monitor work area height.\n");
-            DbgPrint("%swas %i, setting to %i.\n", INDENT, PRECTHEIGHT(prcWindow), RECTHEIGHT(rcWork));
             prcWindow->bottom = prcWindow->top + RECTHEIGHT(rcWork);
             ret = TRUE;
         }
     }
 
-    // Ensure window is entirely in work area (but keep the current size)
+    // Ensure window is entirely in work area
     if (settings.bAlwaysEntirelyOnMonitor) {
-        int cx = PRECTWIDTH(prcWindow);
-        int cy = PRECTHEIGHT(prcWindow);
-
-        if (prcWindow->left < rcWork.left) {
-            prcWindow->left = rcWork.left;
-            prcWindow->right = prcWindow->left + cx;
-            ret = TRUE;
-        }
-        if (prcWindow->top < rcWork.top) {
-            prcWindow->top = rcWork.top;
-            prcWindow->bottom = prcWindow->top + cy;
-            ret = TRUE;
-        }
-        if (prcWindow->right > rcWork.right) {
-            prcWindow->right = rcWork.right;
-            prcWindow->left = prcWindow->right - cx;
-            ret = TRUE;
-        }
-        if (prcWindow->bottom > rcWork.bottom) {
-            prcWindow->bottom = rcWork.bottom;
-            prcWindow->top = prcWindow->bottom - cy;
-            ret = TRUE;
-        }
+        KeepRectInsideBiggerRect(prcWindow, &rcWork);
     }
 
     return ret;
@@ -100,17 +85,15 @@ VOID Window::SizeWindowToGrid(PPOINT pptResizeAround)
         ResizeRectAroundPoint(&rcWindow, windowCX, windowCY, *pptResizeAround);
     } else {
 
-        // Keep same window origin, nad nudge the bottom/right corner to the correct size
+        // Keep same window origin, and nudge the bottom/right corner to the correct size
         rcWindow.right = rcWindow.left + windowCX;
         rcWindow.bottom = rcWindow.top + windowCY;
     }
 
     // Before moving the window, enforce window position restrictions
-    if (EnforceWindowPosRestrictions(&rcWindow)) {
-        DbgPrint("Nudged window position to enforce window position restrictions.\n");
-    }
+    EnforceWindowPosRestrictions(&rcWindow);
 
-    // Print the change in window size
+    // Print the change in window size (if there is one)
     if (prevWindowCX != windowCX || prevWindowCY != windowCY) {
         DbgPrint("Changing window size to fit grid.\n");
         DbgPrint("%sprev size : %i x %i\n%snew size: %i x %i\n",
@@ -139,7 +122,7 @@ VOID Window::ResizeSuggestionRectForDpiChange(PRECT prcSuggestion)
     RECT rcOrig = *prcSuggestion;
 
     // Get the current cursor position (which is NOT the position
-    // at the time this message was queued, unfortunatly...)
+    // at the time this message was queued, unfortunately...)
     POINT pt;
     GetCursorPos(&pt);
 
@@ -176,7 +159,8 @@ VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
     // Start with the suggestion rect
     RECT rcResize = *prc;
     
-    if(!bTrackSnap && !IsZoomed(hwnd)) {
+    // If we're not snapped, attempt to keep the grid from changing
+    if(!IsSnapped()) {
         ResizeSuggestionRectForDpiChange(&rcResize);
     }
 
@@ -203,14 +187,12 @@ VOID Window::HandleWindowPosChanging(PWINDOWPOS pwp)
     // Hack Alert! using a private win32k window arrangement bit...
     bTrackSnap = pwp->flags & 0x00100000; // TODO: get rid of this nonsense
 
+    // If the window is not snapped, and if the new window position needs tweaking
+    // (givin the current window size restrictions), overwrite the new window size,
+    // and disallow the window from being further resized
     RECT rcNewWindowRect = { pwp->x, pwp->y, pwp->x + pwp->cx, pwp->y + pwp->cy };
-    if (!IsZoomed(hwnd) && // (if not maximized)
-        EnforceWindowPosRestrictions(&rcNewWindowRect)) {
-
+    if (!IsSnapped() && EnforceWindowPosRestrictions(&rcNewWindowRect)) {
         pwp->flags |= SWP_NOMOVE;
-
-        pwp->x = rcNewWindowRect.left;
-        pwp->y = rcNewWindowRect.top;
         pwp->cx = RECTWIDTH(rcNewWindowRect);
         pwp->cy = RECTHEIGHT(rcNewWindowRect);
     }
@@ -218,28 +200,27 @@ VOID Window::HandleWindowPosChanging(PWINDOWPOS pwp)
 
 VOID Window::HandleEnterExitMoveSize(BOOL bEnter)
 {
-    if (bEnter) {
-        bTrackMoveSize = TRUE;
-    } else {
-        if (settings.bSnapWindowToGrid && !bTrackSnap) {
-            SizeWindowToGrid(NULL);
-        }
-        bTrackMoveSize = FALSE;
+    // When exiting the move size loop, snap the window to the grid
+    // (if that setting is on), but only if the window is 'snapped'
+    if (!bEnter && settings.bSnapWindowToGrid && !IsSnapped()) {
+        SizeWindowToGrid(NULL);
     }
 }
 
 VOID Window::HandleMouseWheel(HWND hwnd, WPARAM wParam, LPARAM lParam)
 {
+    // For each tick, either adjust the overall grid size (if control is down),
+    // or the block size (for normal scrolling)
     INT wheel_delta = mw_delta.inc(GET_WHEEL_DELTA_WPARAM(wParam));
-
     if (wheel_delta != 0) {
-
         if (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) {
             grid.AdjustGridSize(wheel_delta);
         } else {
             grid.AdjustBlockSize(wheel_delta);
         }
 
+        // After adjusting the grid size, resize the window to fit the grid,
+        // but do so wrt to the cursor positon to keep the cursor within the window
         POINT ptCursor = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
         SizeWindowToGrid(&ptCursor);
     }
@@ -265,91 +246,107 @@ VOID Window::Draw(HDC hdc)
 
 VOID Window::Create(HWND _hwnd)
 {
+    // Save handle to this window
     hwnd = _hwnd;
 
-    DPI = GetDpiForWindow(hwnd);
-    DbgPrint("Initializing window, DPI: %i (%i%%, %.2fx)\n",
-        DPI, DPIinPercentage(DPI), DPItoFloat(DPI));
-
-    grid.SetDpi(DPI);
-    SizeWindowToGrid(NULL);
-
+    // Turn on (private) title bar DPI scaling for the window
     EnableNonClientScalingForWindow(hwnd);
+
+    // Determine the initial window DPI
+    DPI = GetDpiForWindow(hwnd);
+    DbgPrint("%sStarting window DPI: %i (%i%%, %.2fx)\n",
+        INDENT, DPI, DPIinPercentage(DPI), DPItoFloat(DPI));
+
+    // Initialize grid at the starting DPI
+    grid.SetDpi(DPI);
+
+    // Size window so that it always starts perfectly fitting the grid
+    SizeWindowToGrid(NULL);
 }
 
+Window* Window::LookupWindow(HWND hwnd)
+{
+    std::map<HWND, Window*>::iterator it = WindowMap.find(hwnd);
+    return (it != WindowMap.end() ? it->second : NULL);
 
-std::map<HWND, Window*> WindowMap;
+}
+
 LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    std::map<HWND, Window*>::iterator it;
-#define LOOKUPWINDOW    (it = WindowMap.find(hwnd)) != WindowMap.end()
-#define WINDOWPTR       (it->second)
+    Window* pWindow;
 
     switch (message) {
 
     case WM_CREATE:
-    {
-        Window* pWindow = (Window*)(((CREATESTRUCT*)lParam)->lpCreateParams);
-        if (pWindow) {
+
+        // Now that the window has an HWND, add the window to the map, and call Create
+        if (pWindow = (Window*)(((CREATESTRUCT*)lParam)->lpCreateParams)) {
             WindowMap.insert(std::pair<HWND, Window*>(hwnd, pWindow));
             pWindow->Create(hwnd);
         }
         break;
-    }
 
-    case WM_DPICHANGED:
-        if (LOOKUPWINDOW) {
-            WINDOWPTR->HandleDpiChange(HIWORD(wParam), (RECT*)lParam);
+    case WM_DESTROY:
+
+        // When each window is destroyed, remove from the map
+        WindowMap.erase(hwnd);
+
+        // If no more windows are around, exit the message loop
+        if (WindowMap.size() == 0) {
+            DbgPrint("Final Window Exiting...\n");
+            PostQuitMessage(0);
         }
+        else {
+            DbgPrint("Window Exiting...\n");
+        }
+
         break;
 
     case WM_PAINT:
-        if (LOOKUPWINDOW) {
+        if (pWindow = LookupWindow(hwnd)) {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
-            WINDOWPTR->Draw(hdc);
+            pWindow->Draw(hdc);
             EndPaint(hwnd, &ps);
         }
         break;
 
+    case WM_DPICHANGED:
+        if (pWindow = LookupWindow(hwnd)) {
+            pWindow->HandleDpiChange(HIWORD(wParam), (RECT*)lParam);
+        }
+        break;
+
     case WM_WINDOWPOSCHANGING:
-        if (LOOKUPWINDOW) {
-            WINDOWPTR->HandleWindowPosChanging((WINDOWPOS*)lParam);
+        if (pWindow = LookupWindow(hwnd)) {
+            pWindow->HandleWindowPosChanging((WINDOWPOS*)lParam);
         }
         break;
 
     case WM_WINDOWPOSCHANGED:
-        if (LOOKUPWINDOW) {
-            WINDOWPTR->HandleWindowPosChanged();
+        if (pWindow = LookupWindow(hwnd)) {
+            pWindow->HandleWindowPosChanged();
         }
         break;
 
     case WM_ENTERSIZEMOVE:
     case WM_EXITSIZEMOVE:
-        if (LOOKUPWINDOW) {
-            WINDOWPTR->HandleEnterExitMoveSize(message == WM_ENTERSIZEMOVE);
+        if (pWindow = LookupWindow(hwnd)) {
+            pWindow->HandleEnterExitMoveSize(message == WM_ENTERSIZEMOVE);
         }
         break;
 
     case WM_MOUSEWHEEL:
-        if (LOOKUPWINDOW) {
-            WINDOWPTR->HandleMouseWheel(hwnd, wParam, lParam);
+        if (pWindow = LookupWindow(hwnd)) {
+            pWindow->HandleMouseWheel(hwnd, wParam, lParam);
         }
         break;
 
     case WM_LBUTTONDBLCLK:
-        if (LOOKUPWINDOW) {
+        if (pWindow = LookupWindow(hwnd)) {
             POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
-            WINDOWPTR->HandleDoubleClick(pt);
+            pWindow->HandleDoubleClick(pt);
         }
-        break;
-
-    case WM_DESTROY:
-        WindowMap.erase(hwnd);
-        if (WindowMap.size() == 0) {
-            PostQuitMessage(0);
-        }
-        DbgPrint("Window Exiting...\n");
         break;
     }
 
@@ -370,26 +367,52 @@ BOOL Window::EnsureWindowIsRegistered(HINSTANCE hinst, LPWSTR WndClassName)
         wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
         wcex.lpszClassName = WndClassName;
         if (RegisterClassEx(&wcex)) {
+            DbgPrint("Registered window class.\n");
             bRegistered = TRUE;
+        } else {
+            DbgPrintError("Failed to register window class!\n");
         }
     }
     return bRegistered;
 }
 
-Window::Window(INT Gridcx, INT Gridcy, INT blocksize, Settings _settings)
+VOID Window::Init(
+    INT Gridcx,
+    INT Gridcy,
+    INT blocksize,
+    BOOL bResize,
+    BOOL bSnapWindowToGrid,
+    BOOL bRestrictToMonitorSize,
+    BOOL bAlwaysEntirelyOnMonitor)
 {
-    settings = _settings;
-    grid.Init(Gridcx, Gridcy, blocksize);
+    DbgPrint("Creating window...\n");
 
+    // Save Settings and Print On/Off for each Setting
+    Settings set = { bResize,
+                     bSnapWindowToGrid,
+                     bRestrictToMonitorSize,
+                     bAlwaysEntirelyOnMonitor };
+    settings = set;
+
+#define StrOnOff(on)    (on ? "ON" : "OFF")
+    DbgPrint("%sResize: %s\n", INDENT, StrOnOff(bResize));
+    DbgPrint("%sSnap Window to Grid: %s\n", INDENT, StrOnOff(bSnapWindowToGrid));
+    DbgPrint("%sRestrict Window to Monitor Size: %s\n", INDENT, StrOnOff(bRestrictToMonitorSize));
+    DbgPrint("%sKeep Window Entirely on Monitor: %s\n", INDENT, StrOnOff(bAlwaysEntirelyOnMonitor));
+    
+    // Initialize Grid
+    grid.Init(Gridcx, Gridcy, blocksize);
+    DbgPrint("%sInitialized grid to size %i x %i (blocksize: %i)\n", INDENT, Gridcx, Gridcy, blocksize);
+
+    // Register window class (one time only)
     LPWSTR WndClassName = _T("WndClass");
     LPWSTR WndTitle = _T("Grid Sample");
     HINSTANCE hinst = GetModuleHandle(NULL);
-
     if (!EnsureWindowIsRegistered(hinst, WndClassName)) {
-        DbgPrintError("Error: RegisterClassEx Failed.\n");
         return;
     }
 
+    // Create Window
     DWORD WndStyleEx = 0;
     DWORD WndStyle = settings.bResize ? WS_OVERLAPPEDWINDOW :
         WS_OVERLAPPEDWINDOW ^ (WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX);
@@ -400,13 +423,15 @@ Window::Window(INT Gridcx, INT Gridcy, INT blocksize, Settings _settings)
         cy = CW_USEDEFAULT;
 
     HWND hwnd = CreateWindowEx(
-        WndStyleEx,
-        WndClassName,
-        WndTitle,
-        WndStyle,
-        x, y, cx, cy,
-        nullptr, nullptr, hinst,
-        this);
+                    WndStyleEx,
+                    WndClassName,
+                    WndTitle,
+                    WndStyle,
+                    x, y, cx, cy,
+                    nullptr, nullptr, hinst,
+                    
+                    // Create each window with a pointer to it's Window object
+                    this);
 
     if (!hwnd) {
         DbgPrintError("Error: CreateWindowEx Failed.\n");
@@ -417,3 +442,37 @@ Window::Window(INT Gridcx, INT Gridcy, INT blocksize, Settings _settings)
     UpdateWindow(hwnd);
 }
 
+VOID Window::Init(INT cx, INT cy, INT blocksize)
+{
+    Init(cx, cy, blocksize,
+        DefSettings.bResize,
+        DefSettings.bSnapWindowToGrid,
+        DefSettings.bRestrictToMonitorSize,
+        DefSettings.bAlwaysEntirelyOnMonitor);
+}
+
+Window::Window(
+    INT cx,
+    INT cy,
+    INT blocksize,
+    BOOL bResize,
+    BOOL bSnapWindowToGrid,
+    BOOL bRestrictToMonitorSize,
+    BOOL bAlwaysEntirelyOnMonitor)
+{
+    Init(cx, cy, blocksize,
+         bResize,
+         bSnapWindowToGrid,
+         bRestrictToMonitorSize,
+         bAlwaysEntirelyOnMonitor);
+}
+
+Window::Window(INT cx, INT cy, INT blocksize)
+{
+    Init(cx, cy, blocksize);
+}
+
+Window::Window()
+{
+    Init(DefGridCX, DefGridCY, DefGridBlockSize);
+}
