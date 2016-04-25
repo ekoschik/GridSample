@@ -3,17 +3,20 @@
 #include "GridSample.h"
 
 
-int Grid::GetBlockSizeForDpi(UINT dpi)
+VOID Grid::RecalcAdjustedBlockSize()
 {
-    int linearScaled = ScaleToPhys(dpi, baseBlockSize);
-    return linearScaled - (linearScaled % blockSizeModifier);
+    int linearScaled = (int)(baseBlockSize * scale);
+    adjustedBlockSize = linearScaled - (linearScaled % blockSizeModifier);
 }
 
-VOID Grid::SetDpi(UINT _DPI)
+VOID Grid::SetScale(float newScale)
 {
-    DPI = _DPI;
-    adjustedBlockSize = GetBlockSizeForDpi(DPI);
-    DbgPrint("Set new physical block size for DPI %i (new size: %i)\n", DPI, adjustedBlockSize);
+    scale = newScale;
+    RecalcAdjustedBlockSize();
+
+    DbgPrint(
+        "Set new grid scale factor (%.2fx), setting adjusted block size to %i.\n",
+        scale, adjustedBlockSize);
 }
 
 VOID Grid::GetSize(UINT &cx, UINT &cy)
@@ -27,7 +30,7 @@ VOID Grid::AdjustBlockSize(INT delta)
     // Adjust base block size, enforcing a reasonable minimum
     const static int minBlockSize = blockSizeModifier * 2;
     baseBlockSize = EnforceMinimumValue(baseBlockSize + (blockSizeModifier * delta), minBlockSize);
-    adjustedBlockSize = GetBlockSizeForDpi(DPI);
+    RecalcAdjustedBlockSize();
 
     DbgPrint("Set new logical block size: %i (adjusted: %i)\n", baseBlockSize, adjustedBlockSize);
 }
@@ -46,13 +49,10 @@ VOID Grid::AdjustGridSize(INT delta)
         grid_cx, grid_cy, grid_cx_prev, grid_cy_prev);
 }
 
-BOOL Grid::SizeToWindow(HWND hwnd)
+BOOL Grid::SizeToRect(RECT rc)
 {
-    RECT rcClient;
-    GetClientRect(hwnd, &rcClient);
-
-    int newGridCX = RECTWIDTH(rcClient) / adjustedBlockSize;
-    int newGridCY = RECTHEIGHT(rcClient) / adjustedBlockSize;
+    int newGridCX = RECTWIDTH(rc) / adjustedBlockSize;
+    int newGridCY = RECTHEIGHT(rc) / adjustedBlockSize;
 
     if (newGridCX != grid_cx || newGridCY != grid_cy) {
 

@@ -15,7 +15,33 @@ fnTypeGetDpiForWindow pfnGetDpiForWindow = NULL;
 fnTypeEnableNCScaling fnEnableNCScaling = NULL;
 fnTypeEnableBroadcasting fnEnableBroadcasting = NULL;
 
-BOOL InitProcessDpiAwareness()
+VOID SetProcessDpiAwareness(BOOL bSetSystemAware)
+{
+    // Call SetProcessDpiAwareness
+    HRESULT ret;
+    if (bSetSystemAware) {
+        DbgPrint("Setting process as System DPI Aware.\n");
+        ret = SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
+    }
+    else {
+        DbgPrint("Setting process as Per Monitor DPI Aware.\n");
+        ret = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    }
+    if (ret != S_OK) {
+        DbgPrintError("SetProcessDpiAwareness Failed! reason: %s\n",
+            ret == E_INVALIDARG ? "Invalid Args" : "Access Denied");
+    }
+
+    // Store the resulting awareness in gpda
+    GetProcessDpiAwareness(NULL, &gpda);
+
+    // Error if the new awareness is not the right value
+    if ((gpda == PROCESS_PER_MONITOR_DPI_AWARE) != !bSetSystemAware) {
+        DbgPrintError("GetProcessDpiAwareness did not return the expected DPI awareness.\n");
+    }
+}
+
+VOID InitProcessDpiAwareness()
 {
     HMODULE hModUser32 = GetModuleHandle(_T("user32.dll"));
 
@@ -58,34 +84,8 @@ BOOL InitProcessDpiAwareness()
     }
 
     // Set system aware if AdjustWindowRectExForDpi is not available
-    BOOL bSetSystemAware = (pfnAdjustWindowRectExForDpi == NULL);
+    SetProcessDpiAwareness(pfnAdjustWindowRectExForDpi == NULL);
 
-    // Call SetProcessDpiAwareness
-    HRESULT ret;
-    if(bSetSystemAware) {
-        DbgPrint("Setting process as System DPI Aware.\n");
-        ret = SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
-    } else {
-        DbgPrint("Setting process as Per Monitor DPI Aware.\n");
-        ret = SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
-    }
-    if (ret != S_OK) {
-        DbgPrintError("SetProcessDpiAwareness Failed! reason: %s\n",
-            ret == E_INVALIDARG ? "Invalid Args" : "Access Denied");
-
-        return FALSE;
-    }
-
-    // Store the awareness in gpda
-    GetProcessDpiAwareness(NULL, &gpda);
-
-    // Error if the new awareness is not the right value
-    if ((gpda == PROCESS_PER_MONITOR_DPI_AWARE) != !bSetSystemAware) {
-        DbgPrintError("GetProcessDpiAwareness did not return the expected DPI awareness.\n");
-        return FALSE;
-    }
-
-    return TRUE;
 }
 
 BOOL EnableNonClientScalingForWindow(HWND hwnd)

@@ -9,6 +9,7 @@ int main(int argc, char* argv[])
     Window wnd1(10, 8, 40);
 
     MSG msg;
+
     DbgPrint("Entering Message Loop.\n\n");
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);

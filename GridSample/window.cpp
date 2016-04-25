@@ -2,6 +2,8 @@
 #include "stdafx.h"
 #include "GridSample.h"
 
+std::map<HWND, Window*> WindowMap;
+
 BOOL Window::IsSnapped()
 {
     // Windows sends a private flag in WINDOWPOSCHANGING, which is
@@ -150,11 +152,11 @@ VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
 {
     bHandlingDpiChange = TRUE;
 
-    DbgPrint("Handling a DPI change (new DPI: %i, old DPI: %i)\n", _DPI, DPI);
-    DPI = _DPI;
+    DbgPrint("Handling a DPI change (new DPI: %i, old DPI: %i)\n", _DPI, DPI.GetDPI());
+    DPI.SetDPI(_DPI);
 
     // Update grid with new DPI
-    grid.SetDpi(DPI);
+    grid.SetScale(DPI.GetFloat());
 
     // Start with the suggestion rect
     RECT rcResize = *prc;
@@ -177,7 +179,11 @@ VOID Window::HandleDpiChange(UINT _DPI, RECT* prc)
 
 VOID Window::HandleWindowPosChanged()
 {
-    if (grid.SizeToWindow(hwnd) && bHandlingDpiChange) {
+    RECT rcClient;
+    GetClientRect(hwnd, &rcClient);
+
+    // Update the grid for the new window size
+    if (grid.SizeToRect(rcClient) && bHandlingDpiChange) {
         DbgPrintError("Error: resized grid while handling a DPI change.\n");
     }
 }
@@ -253,12 +259,12 @@ VOID Window::Create(HWND _hwnd)
     EnableNonClientScalingForWindow(hwnd);
 
     // Determine the initial window DPI
-    DPI = GetDpiForWindow(hwnd);
+    DPI.SetDPI(GetDpiForWindow(hwnd));
     DbgPrint("%sStarting window DPI: %i (%i%%, %.2fx)\n",
-        INDENT, DPI, DPIinPercentage(DPI), DPItoFloat(DPI));
+        INDENT, DPI.GetDPI(), DPI.GetPercentage(), DPI.GetFloat());
 
     // Initialize grid at the starting DPI
-    grid.SetDpi(DPI);
+    grid.SetScale(DPI.GetFloat());
 
     // Size window so that it always starts perfectly fitting the grid
     SizeWindowToGrid(NULL);
@@ -268,7 +274,6 @@ Window* Window::LookupWindow(HWND hwnd)
 {
     std::map<HWND, Window*>::iterator it = WindowMap.find(hwnd);
     return (it != WindowMap.end() ? it->second : NULL);
-
 }
 
 LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -442,15 +447,6 @@ VOID Window::Init(
     UpdateWindow(hwnd);
 }
 
-VOID Window::Init(INT cx, INT cy, INT blocksize)
-{
-    Init(cx, cy, blocksize,
-        DefSettings.bResize,
-        DefSettings.bSnapWindowToGrid,
-        DefSettings.bRestrictToMonitorSize,
-        DefSettings.bAlwaysEntirelyOnMonitor);
-}
-
 Window::Window(
     INT cx,
     INT cy,
@@ -465,6 +461,15 @@ Window::Window(
          bSnapWindowToGrid,
          bRestrictToMonitorSize,
          bAlwaysEntirelyOnMonitor);
+}
+
+VOID Window::Init(INT cx, INT cy, INT blocksize)
+{
+    Init(cx, cy, blocksize,
+        DefSettings.bResize,
+        DefSettings.bSnapWindowToGrid,
+        DefSettings.bRestrictToMonitorSize,
+        DefSettings.bAlwaysEntirelyOnMonitor);
 }
 
 Window::Window(INT cx, INT cy, INT blocksize)

@@ -8,21 +8,20 @@
 class Grid {
 public:
     VOID Init(INT cx, INT cy, INT blocksize);
-    VOID SetDpi(UINT DPI);
+    VOID SetScale(float newScale);
 
     VOID GetSize(UINT &cx, UINT &cy);
-    BOOL SizeToWindow(HWND hwnd);
+    BOOL SizeToRect(RECT rc);
     VOID Draw(HDC hdc);
 
     // Adjust the grid for scroll/ ctrl+scroll
     VOID AdjustBlockSize(INT delta);
     VOID AdjustGridSize(INT delta);
 
-
 private:
-    UINT DPI;
+    float scale; // Recommended scale, based on the current DPI
 
-    int GetBlockSizeForDpi(UINT dpi);
+    VOID RecalcAdjustedBlockSize();
 
     int blockSizeModifier = 7;
     int baseBlockSize;
@@ -35,20 +34,32 @@ private:
     COLORREF rgbGrid2 = RGB(204, 153, 0); // dark yellow
 };
 
-class MWdelta {
-    INT _delta;
+extern  PROCESS_DPI_AWARENESS gpda;
+__inline BOOL IsProcessPerMonitorDpiAware()  { return gpda == PROCESS_PER_MONITOR_DPI_AWARE; }
+__inline BOOL IsProcessSystemDpiAware()      { return gpda == PROCESS_SYSTEM_DPI_AWARE; }
+
+VOID InitProcessDpiAwareness();
+UINT GetDpiForWindow(HWND hwnd);
+BOOL EnableNonClientScalingForWindow(HWND hwnd);
+BOOL GetWindowSizeForClientSize(HWND hwnd, UINT &cx, UINT &cy);
+
+class DPIContext
+{
 public:
-    MWdelta() { _delta = 0; }
-    INT inc(INT delta) {
-        _delta += delta;
-        if (_delta <= -120 || _delta >= 120) {
-            BOOL bUp = _delta > 0;
-            _delta -= (bUp ? 120 : -120);
-            return (bUp ? 1 : -1);
-        }
-        return 0;
-    }
+    DPIContext()           { DPI = 96; }
+    VOID SetDPI(UINT _DPI) { DPI = _DPI; }
+    UINT GetDPI()          { return DPI; }
+
+    INT ScaleLogToPhys(INT val) { return MulDiv(val, DPI, 96); }
+    INT ScalePhysToLog(INT val) { return MulDiv(val, 96, DPI); }
+
+    UINT GetPercentage() { return ScaleLogToPhys(100); }
+    float GetFloat()     { return ((float)DPI / 96); }
+
+private:
+    UINT DPI;
 };
+
 
 class Window {
 public:
@@ -81,17 +92,17 @@ public:
 private:
 
     HWND hwnd;
-    UINT DPI;
+    DPIContext DPI;
 
     // The window class only needs to be registered one time
     static BOOL EnsureWindowIsRegistered(HINSTANCE, LPWSTR);
 
     // Private Initializers, and WM_CREATE handler
     VOID Init(INT cx, INT cy, INT blocksize,
-        BOOL bResize,
-        BOOL bSnapWindowToGrid,
-        BOOL bRestrictToMonitorSize,
-        BOOL bAlwaysEntirelyOnMonitor);
+              BOOL bResize,
+              BOOL bSnapWindowToGrid,
+              BOOL bRestrictToMonitorSize,
+              BOOL bAlwaysEntirelyOnMonitor);
     VOID Window::Init(INT cx, INT cy, INT blocksize);
     VOID Create(HWND _hwnd);
 
@@ -104,8 +115,21 @@ private:
     };
     Settings settings;
 
+    // Default Settings
+    const Settings DefSettings = {
+        TRUE,  //Resize;
+        FALSE, //Snap Window To Grid;
+        TRUE,  //Restrict To Monitor Size;
+        FALSE  //Always Entirely On Monitor
+    };
+
     // Each window has it's own Grid
     Grid grid;
+
+    // Default Grid Size
+    const INT DefGridCX = 15,
+        DefGridCY = 15,
+        DefGridBlockSize = 50;
 
     // Each window tracks if it's in the process of handling
     // WM_DPICHANGED, in order to error if a DPI change causes 
@@ -114,45 +138,32 @@ private:
 
     // In order to behave correctly while the window is
     // snapped to corners/ sides of monitors, keep track
-    // of whether the window is 'snapped'.  TODO: SuperHacky
+    // of whether the window is 'snapped'.
+    // TODO: How are windows supposed to know if they are 'snapped'?
     BOOL bTrackSnap = FALSE;
     BOOL IsSnapped();
 
     // Delta accumulater for WM_MOUSEWHEEL
+    class MWdelta {
+        INT _delta;
+    public:
+        MWdelta() { _delta = 0; }
+        INT inc(INT delta) {
+            _delta += delta;
+            if (_delta <= -120 || _delta >= 120) {
+                BOOL bUp = _delta > 0;
+                _delta -= (bUp ? 120 : -120);
+                return (bUp ? 1 : -1);
+            }
+            return 0;
+        }
+    };
     MWdelta mw_delta;
 
-    // Defaults
-    const Settings DefSettings = {
-        TRUE,  //Resize;
-        FALSE, //Snap Window To Grid;
-        TRUE,  //Restrict To Monitor Size;
-        FALSE  //Always Entirely On Monitor
-    };
-
-    const INT DefGridCX = 15,
-        DefGridCY = 15,
-        DefGridBlockSize = 50;
-
     // Syntax Glue to allow a single WndProc to be used for several windows at a time
-    static std::map<HWND, Window*> WindowMap;
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
     static Window* LookupWindow(HWND hwnd);
-
 };
-
-extern PROCESS_DPI_AWARENESS gpda;
-#define IsProcessPerMonitorDpiAware() (gpda == PROCESS_PER_MONITOR_DPI_AWARE)
-#define IsProcessSystemDpiAware()     (gpda == PROCESS_SYSTEM_DPI_AWARE)
-
-BOOL InitProcessDpiAwareness();
-UINT GetDpiForWindow(HWND hwnd);
-BOOL EnableNonClientScalingForWindow(HWND hwnd);
-BOOL GetWindowSizeForClientSize(HWND hwnd, UINT &cx, UINT &cy);
-
-#define ScaleToPhys(DPI, val)   MulDiv(val, DPI, 96)
-#define ScaleToLog(DPI, val)    MulDiv(val, 96, DPI)
-#define DPIinPercentage(DPI)    ScaleToPhys(DPI, 100)
-#define DPItoFloat(DPI)         ((float)DPI / 96)
 
 #define RECTWIDTH(rc) (rc.right - rc.left)
 #define RECTHEIGHT(rc) (rc.bottom - rc.top)
@@ -197,10 +208,6 @@ __inline BOOL KeepRectInsideBiggerRect(PRECT rcSmall, const PRECT rcBig) {
     return ret;
 }
 
-//
-// Dbg/ Error printing macros
-//
-
 __inline void SetConsoleColor(WORD Color, WORD &gPrevConsoleTextAttribs) {
     CONSOLE_SCREEN_BUFFER_INFO Info;
     HANDLE hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -213,41 +220,15 @@ __inline void ResetConsoleColor(WORD gPrevConsoleTextAttribs) {
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), gPrevConsoleTextAttribs);
 }
 
+#define DbgPrintError(...) { \
+        WORD PrevConsoleTextAttribs; \
+        SetConsoleColor(BACKGROUND_RED | BACKGROUND_INTENSITY, PrevConsoleTextAttribs); \
+        printf (__VA_ARGS__); \
+        ResetConsoleColor(PrevConsoleTextAttribs); \
+    }
+
+#define DbgPrint(...) { \
+        printf (__VA_ARGS__); \
+    }
+
 #define INDENT "  ---> "
-
-#define DbgPrintImpl(attr, ...) { \
-                                  printf (__VA_ARGS__); \
-                                }
-                                //WORD gPrevConsoleTextAttribs; \
-                                //SetConsoleColor(attr, gPrevConsoleTextAttribs); \
-                                //ResetConsoleColor(gPrevConsoleTextAttribs); \
-                                //}
-
-#define DbgPrintError(...)  DbgPrintImpl(BACKGROUND_RED/*| FOREGROUND_RED */| BACKGROUND_INTENSITY, __VA_ARGS__)
-
-#define FOREGROUND_WHITE    (FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN)
-#define DbgPrint(...)       DbgPrintImpl(FOREGROUND_WHITE | FOREGROUND_INTENSITY, __VA_ARGS__)
-
-#define FOREGROUND_YELLOW       	(FOREGROUND_RED | FOREGROUND_GREEN)
-#define FOREGROUND_CYAN		        (FOREGROUND_BLUE | FOREGROUND_GREEN)
-#define FOREGROUND_MAGENTA	        (FOREGROUND_RED | FOREGROUND_BLUE)
-#define FOREGROUND_BLACK		    0
-#define FOREGROUND_INTENSE_RED		(FOREGROUND_RED | FOREGROUND_INTENSITY)
-#define FOREGROUND_INTENSE_GREEN	(FOREGROUND_GREEN | FOREGROUND_INTENSITY)
-#define FOREGROUND_INTENSE_BLUE		(FOREGROUND_BLUE | FOREGROUND_INTENSITY)
-#define FOREGROUND_INTENSE_WHITE	(FOREGROUND_WHITE | FOREGROUND_INTENSITY)
-#define FOREGROUND_INTENSE_YELLOW	(FOREGROUND_YELLOW | FOREGROUND_INTENSITY)
-#define FOREGROUND_INTENSE_CYAN		(FOREGROUND_CYAN | FOREGROUND_INTENSITY)
-#define FOREGROUND_INTENSE_MAGENTA	(FOREGROUND_MAGENTA | FOREGROUND_INTENSITY)
-#define BACKGROUND_WHITE		    (BACKGROUND_RED | BACKGROUND_BLUE | BACKGROUND_GREEN)
-#define BACKGROUND_YELLOW	        (BACKGROUND_RED | BACKGROUND_GREEN)
-#define BACKGROUND_CYAN		        (BACKGROUND_BLUE | BACKGROUND_GREEN)
-#define BACKGROUND_MAGENTA	        (BACKGROUND_RED | BACKGROUND_BLUE)
-#define BACKGROUND_BLACK		    0
-#define BACKGROUND_INTENSE_RED		(BACKGROUND_RED | BACKGROUND_INTENSITY)
-#define BACKGROUND_INTENSE_GREEN	(BACKGROUND_GREEN | BACKGROUND_INTENSITY)
-#define BACKGROUND_INTENSE_BLUE		(BACKGROUND_BLUE | BACKGROUND_INTENSITY)
-#define BACKGROUND_INTENSE_WHITE	(BACKGROUND_WHITE | BACKGROUND_INTENSITY)
-#define BACKGROUND_INTENSE_YELLOW	(BACKGROUND_YELLOW | BACKGROUND_INTENSITY)
-#define BACKGROUND_INTENSE_CYAN		(BACKGROUND_CYAN | BACKGROUND_INTENSITY)
-#define BACKGROUND_INTENSE_MAGENTA	(BACKGROUND_MAGENTA | BACKGROUND_INTENSITY)
